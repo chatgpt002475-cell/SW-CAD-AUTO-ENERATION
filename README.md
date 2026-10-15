@@ -1,6 +1,35 @@
+# ⚙️ AI-Powered Image-to-3D Parametric CAD & CNC CAM Studio
+
+> **FreeCAD 1.1 + OpenCASCADE Technology 8.0 + OpenCV Web Studio**  
+> Converts 2D engineering drawings and part images into editable 3D parametric CAD models, exports standard STEP / FreeCAD project files, and generates production CNC machining toolpaths and G-code.
+
+---
+
+### 🚀 Quick Start
+To launch the studio web application on **`http://localhost:9000`**:
+```bash
+# Option A: Run the one-click startup batch script
+.\start_server.bat
+
+# Option B: Run via dedicated virtual environment Python
+& ".venv\Scripts\python.exe" server.py
+```
+Open **`http://localhost:9000`** in any web browser.
+
+### 🌟 Key Capabilities
+1. **Dynamic Image & Scale Auto-Calibration**: Real-time classification for Sheet Metal Brackets, Stamped Die Plates, Turned Shafts, and Industrial Flanges with auto-calibrated target width, thickness gauge, and flange height.
+2. **Interactive 3D Viewport**: In-browser Three.js WebGL viewport rendering real FreeCAD OpenCASCADE B-Rep solids (via binary STL) with technical CAD wireframe edges and camera auto-framing.
+3. **Adaptive Parametric Feature Trees**: Domain-specific feature hierarchies (e.g. `SheetMetalBasePlate`, `Primary90DegBend`, `UprightFlangeWeb`, `CentralMotorClearanceBore`, `UpperMountingHoles_2x`, `TopCanopyFold`).
+4. **CNC CAM Integration**: Generates controller-specific G-code (LinuxCNC, GRBL, Fanuc, Haas) with feeds, speeds, and cycle time estimation.
+5. **Multi-Format Export**: One-click downloads for **STEP (ISO 10303 AP214)**, **FreeCAD Project (.FCStd)**, **G-Code (.nc)**, and **STL (.stl)**.
+
+📖 **Detailed Documentation**: See [docs/SESSION_SUMMARY_2026-10-15.md](docs/SESSION_SUMMARY_2026-10-15.md) for full architecture and technical breakdown.
+
+---
+
 <a href="https://freecad.org"><img src="/src/Gui/Icons/freecad.svg" height="100px" width="100px"></a>
 
-### Your own 3D Parametric Modeler
+### Upstream FreeCAD Platform
 
 [Website](https://www.freecad.org) •
 [Documentation](https://wiki.freecad.org) •
