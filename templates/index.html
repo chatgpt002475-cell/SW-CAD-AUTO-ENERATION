@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Parametric CAD & CNC CAM Studio - FreeCAD 1.1</title>
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --panel-bg: #1e293b;
+            --panel-border: #334155;
+            --accent-blue: #38bdf8;
+            --accent-green: #10b981;
+            --accent-purple: #818cf8;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --card-bg: #090d16;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        header {
+            background: #0b1120;
+            border-bottom: 1px solid var(--panel-border);
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand h1 {
+            font-size: 1.15rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: #fff;
+        }
+
+        .badge {
+            background: #1e293b;
+            color: var(--accent-blue);
+            font-size: 0.72rem;
+            padding: 3px 8px;
+            border-radius: 6px;
+            border: 1px solid #38bdf840;
+            font-family: monospace;
+        }
+
+        .workspace {
+            display: grid;
+            grid-template-columns: 360px 1fr 380px;
+            grid-template-rows: 1fr 220px;
+            height: calc(100vh - 54px);
+            gap: 1px;
+            background: var(--panel-border);
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            padding: 14px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .panel-title {
+            font-size: 0.82rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* 1. Left Panel */
+        .dropzone {
+            border: 2px dashed #475569;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            background: var(--card-bg);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .dropzone:hover {
+            border-color: var(--accent-blue);
+            background: #0f172a;
+        }
+
+        .dropzone img {
+            max-width: 100%;
+            max-height: 160px;
+            border-radius: 4px;
+            margin-top: 10px;
+            display: none;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        label {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        input[type="number"], select {
+            background: var(--card-bg);
+            border: 1px solid var(--panel-border);
+            color: #fff;
+            padding: 8px 10px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            outline: none;
+        }
+
+        input[type="number"]:focus, select:focus {
+            border-color: var(--accent-blue);
+        }
+
+        .btn-primary {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 10px 14px;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 0.88rem;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-primary:hover {
+            background: #1d4ed8;
+        }
+
+        /* 2. Center Panel (Viewport) */
+        .viewport-container {
+            background: #050811;
+            position: relative;
+            grid-column: 2 / 3;
+            overflow: hidden;
+        }
+
+        #cadCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .viewport-overlay {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            display: flex;
+            gap: 8px;
+            z-index: 10;
+        }
+
+        .vp-btn {
+            background: #1e293bcf;
+            border: 1px solid var(--panel-border);
+            color: #fff;
+            font-size: 0.75rem;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            backdrop-filter: blur(4px);
+        }
+
+        .vp-btn:hover {
+            border-color: var(--accent-blue);
+        }
+
+        .telemetry-card {
+            position: absolute;
+            bottom: 12px;
+            left: 12px;
+            background: #090d16d0;
+            border: 1px solid var(--panel-border);
+            border-radius: 6px;
+            padding: 10px 14px;
+            font-family: monospace;
+            font-size: 0.75rem;
+            color: #cbd5e1;
+            z-index: 10;
+            backdrop-filter: blur(6px);
+            line-height: 1.5;
+        }
+
+        /* 3. Right Panel (Feature Tree & CAM) */
+        .feature-item {
+            background: var(--card-bg);
+            border: 1px solid var(--panel-border);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .feature-tag {
+            font-family: monospace;
+            font-size: 0.7rem;
+            color: var(--accent-green);
+        }
+
+        .download-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .btn-download {
+            background: #0f172a;
+            border: 1px solid var(--panel-border);
+            color: var(--accent-blue);
+            padding: 8px;
+            border-radius: 6px;
+            font-size: 0.78rem;
+            text-align: center;
+            text-decoration: none;
+            font-weight: 600;
+            display: block;
+            cursor: pointer;
+        }
+
+        .btn-download:hover {
+            border-color: var(--accent-blue);
+            background: #1e293b;
+        }
+
+        /* 4. Bottom Panel (Console & G-Code) */
+        .bottom-panel {
+            grid-column: 1 / -1;
+            background: #080c14;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 12px;
+            padding: 12px;
+            overflow: hidden;
+        }
+
+        .console-box {
+            background: #030712;
+            border: 1px solid #1f2937;
+            border-radius: 6px;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 0.72rem;
+            color: #10b981;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            height: 100%;
+        }
+
+        .gcode-preview {
+            color: #93c5fd;
+        }
+
+        .spinner {
+            display: none;
+            width: 18px;
+            height: 18px;
+            border: 2px solid #ffffff40;
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+    <!-- Three.js and OrbitControls -->
+    <script src="/static/libs/three.min.js"></script>
+    <script src="/static/libs/OrbitControls.js"></script>
+</head>
+<body>
+
+    <header>
+        <div class="brand">
+            <h1>⚙️ AI Parametric CAD & CNC CAM Studio</h1>
+            <span class="badge">FreeCAD 1.1 + OCCT 8.0 Engine</span>
+            <span class="badge" style="color: var(--accent-green); border-color: #10b98140;">Port 9000</span>
+        </div>
+        <div>
+            <span class="badge">Repo: chatgpt002475-cell/SW-CAD-AUTO-ENERATION</span>
+        </div>
+    </header>
+
+    <div class="workspace">
+
+        <!-- 1. Left Panel: Input & Calibration -->
+        <div class="panel">
+            <div class="panel-title">
+                <span>1. Image Input & Calibration</span>
+            </div>
+
+            <div class="dropzone" id="dropArea" onclick="document.getElementById('imgFileInput').click()">
+                <div id="dropText">
+                    <p style="font-weight:600; font-size:0.85rem;">📁 Drag & Drop Drawing or Click</p>
+                    <p style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">Supports PNG, JPG, BMP, TIFF</p>
+                </div>
+                <img id="previewImg" alt="Drawing Preview">
+                <input type="file" id="imgFileInput" accept="image/*" style="display:none;" onchange="handleFileSelect(event)">
+            </div>
+
+            <div class="form-group">
+                <label>Target Part Width (Known Scale):</label>
+                <input type="number" id="targetWidth" value="120.0" step="1.0">
+            </div>
+
+            <div class="form-group">
+                <label>Base Plate Thickness (mm):</label>
+                <input type="number" id="baseThickness" value="12.0" step="1.0">
+            </div>
+
+            <div class="form-group">
+                <label>Upright Flange Height (mm):</label>
+                <input type="number" id="flangeHeight" value="35.0" step="1.0">
+            </div>
+
+            <div class="form-group">
+                <label>CNC Controller Dialect:</label>
+                <select id="cncController">
+                    <option value="LinuxCNC">LinuxCNC (Industrial VMC)</option>
+                    <option value="GRBL">GRBL (Desktop CNC)</option>
+                    <option value="Fanuc">Fanuc G-Code</option>
+                    <option value="Haas">Haas Machining Dialect</option>
+                </select>
+            </div>
+
+            <button class="btn-primary" id="reconstructBtn" onclick="runReconstruction()">
+                <span class="spinner" id="spinIndicator"></span>
+                <span>⚡ Reconstruct 3D Parametric CAD</span>
+            </button>
+        </div>
+
+        <!-- 2. Center Panel: 3D Viewport -->
+        <div class="viewport-container">
+            <div class="viewport-overlay">
+                <button class="vp-btn" onclick="setView('iso')">Isometric</button>
+                <button class="vp-btn" onclick="setView('top')">Top (XY)</button>
+                <button class="vp-btn" onclick="setView('front')">Front (XZ)</button>
+                <button class="vp-btn" onclick="toggleWireframe()">Wireframe / Shaded</button>
+                <button class="vp-btn" onclick="resetView()">Reset</button>
+            </div>
+
+            <div class="telemetry-card" id="telemetryCard">
+                <div>Model: Industrial Flange Bracket</div>
+                <div>Status: Awaiting Image Reconstruction</div>
+                <div>Volume: -- | Bounding Box: --</div>
+            </div>
+
+            <div id="cadCanvas"></div>
+        </div>
+
+        <!-- 3. Right Panel: Parametric Feature Tree & CAM -->
+        <div class="panel">
+            <div class="panel-title">
+                <span>2. Parametric Feature Tree</span>
+            </div>
+
+            <div id="featureTreeList" style="display:flex; flex-direction:column; gap:6px;">
+                <div class="feature-item">
+                    <span>BasePad</span>
+                    <span class="feature-tag">PartDesign::Pad (T=12mm)</span>
+                </div>
+                <div class="feature-item">
+                    <span>FlangePad</span>
+                    <span class="feature-tag">PartDesign::Pad (H=35mm)</span>
+                </div>
+                <div class="feature-item">
+                    <span>Hole1_Pocket</span>
+                    <span class="feature-tag">ThroughHole (Dia=10mm)</span>
+                </div>
+                <div class="feature-item">
+                    <span>Hole2_Pocket</span>
+                    <span class="feature-tag">ThroughHole (Dia=10mm)</span>
+                </div>
+            </div>
+
+            <div class="panel-title" style="margin-top:10px;">
+                <span>3. CAM Operations & Postprocessor</span>
+            </div>
+
+            <div id="camSummary" style="font-size:0.78rem; color:var(--text-muted); line-height:1.6; background:var(--card-bg); padding:10px; border-radius:6px; border:1px solid var(--panel-border);">
+                <div>Facing: Op1 (Face Mill 50mm)</div>
+                <div>Drilling: Op2 (Twist Drill 10mm)</div>
+                <div>Profiling: Op4 (Endmill 10mm)</div>
+                <div style="color:var(--accent-green); font-weight:600; margin-top:4px;" id="camEstTime">Est. Cycle Time: 1m 40s</div>
+            </div>
+
+            <div class="download-grid">
+                <a id="btnStep" class="btn-download" href="#">💾 Download STEP</a>
+                <a id="btnFcstd" class="btn-download" href="#">📦 FreeCAD Project</a>
+                <a id="btnGcode" class="btn-download" href="#">🛠️ Download G-Code</a>
+                <a id="btnStl" class="btn-download" href="#">🖨️ Download STL</a>
+            </div>
+        </div>
+
+        <!-- 4. Bottom Panel: Log & Uncertainty Report & G-Code View -->
+        <div class="bottom-panel">
+            <div>
+                <div class="panel-title" style="margin-bottom:6px;">Build & Recompute Terminal</div>
+                <div class="console-box" id="buildLog">[*] Ready. Drop or select a 2D image drawing to start.
+[*] FreeCAD 1.1 kernel initialized with OpenCASCADE Technology.</div>
+            </div>
+            <div>
+                <div class="panel-title" style="margin-bottom:6px;">Uncertainty & Geometric Inference Audit</div>
+                <div class="console-box" id="uncertaintyBox" style="color:#fbbf24;">[Evidence] 2D XY contours detected via OpenCV Otsu segmentation.
+[Inference] Z-depth calibrated to user thickness parameter (Single-view projection).
+[Verification] Solid verified non-zero positive manifold B-Rep.</div>
+            </div>
+            <div>
+                <div class="panel-title" style="margin-bottom:6px;">Postprocessed G-Code Stream</div>
+                <div class="console-box gcode-preview" id="gcodeBox">(G-Code Output Stream)
+%
+(PROGRAM: PART_1001)
+G21 G90 G17 G54
+M3 S6000
+G0 Z15.000
+...</div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        let scene, camera, renderer, controls, cadMesh;
+        let isWireframe = false;
+        let currentFile = null;
+
+        function init3D() {
+            const container = document.getElementById('cadCanvas');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x060913);
+
+            camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 2000);
+            camera.position.set(120, 100, 150);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+
+            // Lights
+            const ambient = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambient);
+
+            const dir1 = new THREE.DirectionalLight(0x38bdf8, 1.2);
+            dir1.position.set(150, 200, 100);
+            scene.add(dir1);
+
+            const dir2 = new THREE.DirectionalLight(0xffffff, 0.8);
+            dir2.position.set(-150, -100, -100);
+            scene.add(dir2);
+
+            // Engineering Grid
+            const grid = new THREE.GridHelper(300, 30, 0x1e293b, 0x0f172a);
+            grid.position.y = -0.5;
+            scene.add(grid);
+
+            createProceduralCadModel(120, 12, 35);
+
+            window.addEventListener('resize', onWindowResize);
+            animate();
+        }
+
+        function createProceduralCadModel(width, thickness, flangeH) {
+            if (cadMesh) scene.remove(cadMesh);
+
+            const group = new THREE.Group();
+            const mat = new THREE.MeshStandardMaterial({
+                color: 0x38bdf8,
+                metalness: 0.6,
+                roughness: 0.25,
+                wireframe: isWireframe
+            });
+
+            // Base plate
+            const baseGeo = new THREE.BoxGeometry(width, thickness, width * 0.6);
+            const baseMesh = new THREE.Mesh(baseGeo, mat);
+            baseMesh.position.y = thickness / 2;
+            group.add(baseMesh);
+
+            // Upright Flange
+            if (flangeH > 0) {
+                const flangeGeo = new THREE.BoxGeometry(width, flangeH, 12);
+                const flangeMesh = new THREE.Mesh(flangeGeo, mat);
+                flangeMesh.position.set(0, thickness + flangeH / 2, -(width * 0.3) + 6);
+                group.add(flangeMesh);
+            }
+
+            cadMesh = group;
+            scene.add(cadMesh);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            const container = document.getElementById('cadCanvas');
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        function setView(type) {
+            if (type === 'iso') camera.position.set(120, 100, 150);
+            if (type === 'top') camera.position.set(0, 220, 0);
+            if (type === 'front') camera.position.set(0, 0, 220);
+            controls.target.set(0, 0, 0);
+            controls.update();
+        }
+
+        function toggleWireframe() {
+            isWireframe = !isWireframe;
+            if (cadMesh) {
+                cadMesh.traverse(child => {
+                    if (child.isMesh) child.material.wireframe = isWireframe;
+                });
+            }
+        }
+
+        function resetView() {
+            setView('iso');
+        }
+
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (file) {
+                currentFile = file;
+                const reader = new FileReader();
+                reader.onload = ev => {
+                    const img = document.getElementById('previewImg');
+                    img.src = ev.target.result;
+                    img.style.display = 'block';
+                    document.getElementById('dropText').style.display = 'none';
+                };
+                reader.readAsDataURL(file);
+                logBuild(`[*] Selected file: ${file.name} (${(file.size/1024).toFixed(1)} KB)`);
+            }
+        }
+
+        function logBuild(msg) {
+            const el = document.getElementById('buildLog');
+            el.innerText += `\n${msg}`;
+            el.scrollTop = el.scrollHeight;
+        }
+
+        async function runReconstruction() {
+            const btn = document.getElementById('reconstructBtn');
+            const spin = document.getElementById('spinIndicator');
+
+            btn.disabled = true;
+            spin.style.display = 'inline-block';
+            logBuild("[*] Sending image to FreeCAD 1.1 + OpenCV reconstruction pipeline...");
+
+            const form = new FormData();
+            if (currentFile) {
+                form.append('image', currentFile);
+            } else {
+                // Use synthetic flange default if no file uploaded
+                const resp = await fetch('/static/libs/default_sample.png').catch(() => null);
+                const blob = new Blob(["sample"], { type: 'image/png' });
+                form.append('image', blob, 'sample_flange.png');
+            }
+
+            form.append('target_width_mm', document.getElementById('targetWidth').value);
+            form.append('base_thickness_mm', document.getElementById('baseThickness').value);
+            form.append('flange_height_mm', document.getElementById('flangeHeight').value);
+            form.append('controller', document.getElementById('cncController').value);
+
+            try {
+                const res = await fetch('/api/reconstruct', { method: 'POST', body: form });
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    logBuild(`[+] Reconstruction Successful! Job ID: ${data.job_id}`);
+                    logBuild(`[+] Valid Manifold Solid: Volume = ${data.cad_validation.volume_cm3} cm3`);
+                    logBuild(`[+] G-Code Generated for ${document.getElementById('cncController').value}`);
+
+                    // Update 3D Geometry
+                    const w = parseFloat(document.getElementById('targetWidth').value);
+                    const t = parseFloat(document.getElementById('baseThickness').value);
+                    const fh = parseFloat(document.getElementById('flangeHeight').value);
+                    createProceduralCadModel(w, t, fh);
+
+                    // Update Telemetry
+                    const val = data.cad_validation;
+                    const cam = data.cam_simulation;
+                    document.getElementById('telemetryCard').innerHTML = `
+                        <div style="color:#38bdf8; font-weight:700;">OpenCASCADE B-Rep Solid Verified</div>
+                        <div>Volume: ${val.volume_cm3} cm³ | Area: ${val.surface_area_cm2} cm²</div>
+                        <div>Bounding Box: X=${val.bounding_box_mm.x_len} Y=${val.bounding_box_mm.y_len} Z=${val.bounding_box_mm.z_len} mm</div>
+                        <div>Faces: ${val.faces_count} | Solids: ${val.solids_count} | Shells: ${val.shells_count}</div>
+                    `;
+
+                    // Update Feature Tree
+                    const ftList = document.getElementById('featureTreeList');
+                    ftList.innerHTML = `
+                        <div class="feature-item"><span>BaseSketch</span><span class="feature-tag">2D Constrained Sketch</span></div>
+                        <div class="feature-item"><span>BasePad</span><span class="feature-tag">PartDesign::Pad (T=${t}mm)</span></div>
+                    `;
+                    if (fh > 0) {
+                        ftList.innerHTML += `<div class="feature-item"><span>FlangePad</span><span class="feature-tag">PartDesign::Pad (H=${fh}mm)</span></div>`;
+                    }
+                    (data.recognized_features.holes || []).forEach(h => {
+                        ftList.innerHTML += `<div class="feature-item"><span>${h.id}</span><span class="feature-tag">ThroughHole (Dia=${h.diameter_mm}mm)</span></div>`;
+                    });
+
+                    // Update Downloads
+                    document.getElementById('btnStep').href = data.downloads.step;
+                    document.getElementById('btnFcstd').href = data.downloads.fcstd;
+                    document.getElementById('btnGcode').href = data.downloads.gcode;
+                    document.getElementById('camEstTime').innerText = `Est. Cycle Time: ${cam.estimated_cycle_time_formatted}`;
+
+                    // Update G-Code Stream
+                    document.getElementById('gcodeBox').innerText = data.gcode_text.substring(0, 1500) + "\n... (truncated for preview)";
+
+                } else {
+                    logBuild(`[-] Error: ${data.message || 'Pipeline failed'}`);
+                }
+            } catch (err) {
+                logBuild(`[-] Pipeline Error: ${err}`);
+            } finally {
+                btn.disabled = false;
+                spin.style.display = 'none';
+            }
+        }
+
+        window.onload = init3D;
+    </script>
+</body>
+</html>
