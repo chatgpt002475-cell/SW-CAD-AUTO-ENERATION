@@ -107,6 +107,9 @@ class ImageToCadCamPipeline:
         combined_params.setdefault("flange_height_mm", flange_height_mm)
         combined_params.setdefault("contour_points", classification.get("contour_points", []))
         combined_params.setdefault("detected_holes", classification.get("detected_holes", []))
+        combined_params.setdefault("detected_slots", classification.get("detected_slots", []))
+        combined_params.setdefault("detected_pockets", classification.get("detected_pockets", []))
+        combined_params.setdefault("is_revolved", classification.get("is_revolved", False))
 
         # 5. Parametric CAD Reconstruction
         doc_mgr = DocumentManager("ReconstructedPart")

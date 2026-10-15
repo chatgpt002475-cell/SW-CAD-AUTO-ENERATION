@@ -116,9 +116,9 @@ def reconstruct():
     file.save(input_path)
 
     # Form parameters
-    width_mm = float(request.form.get("target_width_mm", 100.0))
-    thickness_mm = float(request.form.get("base_thickness_mm", 12.0))
-    flange_h_mm = float(request.form.get("flange_height_mm", 0.0))
+    width_mm = float(request.form.get("target_width_mm") or request.form.get("target_width") or 100.0)
+    thickness_mm = float(request.form.get("base_thickness_mm") or request.form.get("base_thickness") or 3.0)
+    flange_h_mm = float(request.form.get("flange_height_mm") or request.form.get("flange_height") or 0.0)
     controller = request.form.get("controller", "LinuxCNC")
 
     step_name = f"cad_{job_id}.step"

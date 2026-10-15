@@ -414,8 +414,8 @@
 
             <div class="dropzone" id="dropArea" onclick="document.getElementById('imgFileInput').click()">
                 <div id="dropText">
-                    <p style="font-weight:600; font-size:0.82rem;">📁 Drag & Drop Part Drawing / Photo</p>
-                    <p style="font-size:0.72rem; color:var(--text-muted); margin-top:3px;">PNG, JPG, BMP, TIFF, WEBP</p>
+                    <p style="font-weight:600; font-size:0.82rem;">📁 Drag & Drop ANY Mechanical Component Drawing / Photo</p>
+                    <p style="font-size:0.72rem; color:var(--text-muted); margin-top:3px;">Plates, Brackets, Housings, Links, Shafts, Stamping, Flanges (PNG, JPG, BMP, WEBP)</p>
                 </div>
                 <img id="previewImg" alt="Drawing Preview">
                 <input type="file" id="imgFileInput" accept="image/*" style="display:none;" onchange="handleFileSelect(event)">
@@ -467,9 +467,9 @@
             </div>
 
             <div class="telemetry-card" id="telemetryCard">
-                <div style="color:var(--accent-blue); font-weight:700;">Formed Sheet Metal Bracket</div>
-                <div>Status: Awaiting Image Reconstruction</div>
-                <div>Bounding Box: X=75 Y=45 Z=62 mm | T=2.0 mm</div>
+                <div style="color:var(--accent-blue); font-weight:700;">Universal Mechanical Component</div>
+                <div>Status: Ready to Remaster ANY Mechanical Component</div>
+                <div>Drop any image to extract contour, holes, slots, and 3D solid</div>
             </div>
 
             <div id="cadCanvas"></div>
@@ -542,9 +542,10 @@ G0 Z15.000</div>
         let scene, camera, renderer, controls, cadMesh;
         let isWireframe = false;
         let currentFile = null;
-        let currentCategory = 'SHEET_METAL_BRACKET';
+        let currentCategory = 'PRISMATIC_MACHINED_PART';
         let currentContourPoints = null;
         let currentDetectedHoles = null;
+        let currentDetectedSlots = null;
 
         // 1. Initialize Three.js Viewport
         function init3D() {
@@ -701,8 +702,8 @@ G0 Z15.000</div>
             }
         }
 
-        // Procedural CAD Solid Generation (Accurate preview for Sheet Metal, Stamping, Shaft, Flange)
-        function createProceduralCadModel(category, width, thickness, flangeH, contourPoints = null, detectedHoles = null) {
+        // Procedural CAD Solid Generation (Accurate universal preview for ANY component)
+        function createProceduralCadModel(category, width, thickness, flangeH, contourPoints = null, detectedHoles = null, detectedSlots = null) {
             if (cadMesh) scene.remove(cadMesh);
 
             const group = new THREE.Group();
@@ -727,195 +728,79 @@ G0 Z15.000</div>
             }
 
             const cPoints = contourPoints || currentContourPoints;
-            const dHoles = detectedHoles || currentDetectedHoles;
+            const dHoles = detectedHoles || currentDetectedHoles || [];
+            const dSlots = detectedSlots || currentDetectedSlots || [];
 
-            if (category === 'SHEET_METAL_BRACKET') {
-                if (cPoints && cPoints.length >= 4) {
-                    const shape = new THREE.Shape();
-                    shape.moveTo(cPoints[0][0], cPoints[0][1]);
-                    for (let i = 1; i < cPoints.length; i++) {
-                        shape.lineTo(cPoints[i][0], cPoints[i][1]);
-                    }
-                    shape.closePath();
-
-                    if (dHoles && dHoles.length > 0) {
-                        dHoles.forEach(h => {
-                            const holePath = new THREE.Path();
-                            const r = Math.max(1.5, (h.dia || 4.0) / 2.0);
-                            holePath.absarc(h.x, h.y, r, 0, Math.PI * 2, true);
-                            shape.holes.push(holePath);
-                        });
-                    }
-
-                    const extrudeSettings = {
-                        steps: 1,
-                        depth: thickness,
-                        bevelEnabled: true,
-                        bevelThickness: 0.2,
-                        bevelSize: 0.2,
-                        bevelSegments: 2
-                    };
-                    const plateGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-                    plateGeo.rotateX(-Math.PI / 2);
-                    addPart(plateGeo, [0, thickness, 0]);
-
-                    if (flangeH > 0) {
-                        const xs = cPoints.map(p => p[0]);
-                        const ys = cPoints.map(p => p[1]);
-                        const minX = Math.min(...xs), maxX = Math.max(...xs);
-                        const maxY = Math.max(...ys);
-                        const flangeW = (maxX - minX) * 0.65;
-                        const fx = minX + (maxX - minX) * 0.35;
-                        const flangeGeo = new THREE.BoxGeometry(flangeW, flangeH, thickness);
-                        addPart(flangeGeo, [fx, thickness + flangeH / 2, -maxY + thickness / 2]);
-                    }
-                } else {
-                    const baseL = width * 0.6;
-                    // 1. Horizontal Base Plate
-                    addPart(new THREE.BoxGeometry(width, thickness, baseL), [0, thickness/2, baseL/2]);
-
-                    // 2. Base Mounting Holes (Visual Cylinders)
-                    const holeMat = new THREE.MeshStandardMaterial({ color: 0x030712 });
-                    const h1 = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.5, thickness + 0.2, 16), holeMat);
-                    h1.position.set(-width * 0.28, thickness/2, baseL * 0.5);
-                    group.add(h1);
-                    const h2 = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.5, thickness + 0.2, 16), holeMat);
-                    h2.position.set(width * 0.28, thickness/2, baseL * 0.5);
-                    group.add(h2);
-
-                    // 3. Upright Flange Web
-                    if (flangeH > 0) {
-                        addPart(new THREE.BoxGeometry(width, flangeH, thickness), [0, thickness + flangeH/2, thickness/2]);
-
-                        // Central Motor Clearance Bore
-                        const bore = new THREE.Mesh(new THREE.CylinderGeometry(14, 14, thickness + 0.4, 24), holeMat);
-                        bore.rotation.x = Math.PI / 2;
-                        bore.position.set(0, thickness + flangeH * 0.52, thickness/2);
-                        group.add(bore);
-
-                        // Upper mounting holes
-                        const uh1 = new THREE.Mesh(new THREE.CylinderGeometry(2.8, 2.8, thickness + 0.3, 16), holeMat);
-                        uh1.rotation.x = Math.PI / 2;
-                        uh1.position.set(-width * 0.28, thickness + flangeH * 0.82, thickness/2);
-                        group.add(uh1);
-                        const uh2 = new THREE.Mesh(new THREE.CylinderGeometry(2.8, 2.8, thickness + 0.3, 16), holeMat);
-                        uh2.rotation.x = Math.PI / 2;
-                        uh2.position.set(width * 0.28, thickness + flangeH * 0.82, thickness/2);
-                        group.add(uh2);
-
-                        // 4. Top Canopy Fold Lip
-                        const topLip = 16.0;
-                        addPart(new THREE.BoxGeometry(width * 0.6, thickness, topLip), [0, thickness + flangeH - thickness/2, -topLip/2 + thickness]);
-                    }
+            if (category === 'REVOLVED_COMPONENT' || category === 'TURNED_SHAFT') {
+                // Stepped Cylindrical Revolved Shaft
+                const length = width * 1.2;
+                addPart(new THREE.CylinderGeometry(width * 0.25, width * 0.25, length * 0.4, 32), [0, 0, 0], [0, 0, Math.PI/2]);
+                addPart(new THREE.CylinderGeometry(width * 0.20, width * 0.20, length * 0.35, 32), [length * 0.35, 0, 0], [0, 0, Math.PI/2]);
+                addPart(new THREE.CylinderGeometry(width * 0.15, width * 0.15, length * 0.25, 32), [-length * 0.30, 0, 0], [0, 0, Math.PI/2]);
+                const kw = new THREE.Mesh(new THREE.BoxGeometry(length * 0.2, 4, 8), new THREE.MeshStandardMaterial({ color: 0x030712 }));
+                kw.position.set(length * 0.3, width * 0.18, 0);
+                group.add(kw);
+            } else {
+                // Universal Prismatic / Contoured / Multi-Feature Mechanical Solid
+                let pts = cPoints;
+                if (!pts || pts.length < 3) {
+                    const hw = width / 2.0;
+                    const hh = (width * 0.6) / 2.0;
+                    pts = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]];
                 }
-            } else if (category === 'STAMPED_COMPONENT') {
-                const height = width * 0.58;
-                const hw = width / 2;
-                const hh = height / 2;
-                const R = Math.min(14, height * 0.2);
 
                 const shape = new THREE.Shape();
-                shape.moveTo(-hw + R, -hh);
-                shape.lineTo(hw - R, -hh);
-                shape.absarc(hw - R, -hh + R, R, -Math.PI/2, 0, false);
-                shape.lineTo(hw, hh - R);
-                shape.absarc(hw - R, hh - R, R, 0, Math.PI/2, false);
-                shape.lineTo(-hw + R, hh);
-                shape.absarc(-hw + R, hh - R, R, Math.PI/2, Math.PI, false);
-                shape.lineTo(-hw, -hh + R);
-                shape.absarc(-hw + R, -hh + R, R, Math.PI, 3*Math.PI/2, false);
+                shape.moveTo(pts[0][0], pts[0][1]);
+                for (let i = 1; i < pts.length; i++) {
+                    shape.lineTo(pts[i][0], pts[i][1]);
+                }
+                shape.closePath();
 
-                // Central Pilot Bore (Dia 16mm)
-                const boreHole = new THREE.Path();
-                const bx = 20 * (width / 130), by = 2 * (height / 75), br = 8 * (width / 130);
-                boreHole.absarc(bx, by, br, 0, Math.PI * 2, true);
-                shape.holes.push(boreHole);
+                // 1. Add all through holes
+                dHoles.forEach(h => {
+                    const hp = new THREE.Path();
+                    const r = Math.max(1.5, (h.dia || 4.0) / 2.0);
+                    hp.absarc(h.x, h.y, r, 0, Math.PI * 2, true);
+                    shape.holes.push(hp);
+                });
 
-                // Bottom Perimeter Relief Notch Cutout (12x28mm)
-                const nw = 12 * (width / 130), nd = 28 * (height / 75), nx = -8 * (width / 130);
-                const notch = new THREE.Path();
-                notch.moveTo(nx - nw/2, -hh - 1);
-                notch.lineTo(nx + nw/2, -hh - 1);
-                notch.lineTo(nx + nw/2, -hh + nd);
-                notch.lineTo(nx - nw/2, -hh + nd);
-                notch.closePath();
-                shape.holes.push(notch);
-
-                // Top-Left Horizontal Slot (22x6mm)
-                const s1x = -32 * (width / 130), s1y = 20 * (height / 75), s1l = 22 * (width / 130), s1w = 6;
-                const slot1 = new THREE.Path();
-                slot1.moveTo(s1x - s1l/2, s1y - s1w/2);
-                slot1.lineTo(s1x + s1l/2, s1y - s1w/2);
-                slot1.lineTo(s1x + s1l/2, s1y + s1w/2);
-                slot1.lineTo(s1x - s1l/2, s1y + s1w/2);
-                slot1.closePath();
-                shape.holes.push(slot1);
-
-                // Bottom-Left Vertical Slot (6x18mm)
-                const s2x = -42 * (width / 130), s2y = -10 * (height / 75), s2w = 6, s2l = 18 * (height / 75);
-                const slot2 = new THREE.Path();
-                slot2.moveTo(s2x - s2w/2, s2y - s2l/2);
-                slot2.lineTo(s2x + s2w/2, s2y - s2l/2);
-                slot2.lineTo(s2x + s2w/2, s2y + s2l/2);
-                slot2.lineTo(s2x - s2w/2, s2y + s2l/2);
-                slot2.closePath();
-                shape.holes.push(slot2);
-
-                // Bottom-Right Vertical Slot (6x18mm)
-                const s3x = 38 * (width / 130), s3y = -18 * (height / 75), s3w = 6, s3l = 18 * (height / 75);
-                const slot3 = new THREE.Path();
-                slot3.moveTo(s3x - s3w/2, s3y - s3l/2);
-                slot3.lineTo(s3x + s3w/2, s3y - s3l/2);
-                slot3.lineTo(s3x + s3w/2, s3y + s3l/2);
-                slot3.lineTo(s3x - s3w/2, s3y + s3l/2);
-                slot3.closePath();
-                shape.holes.push(slot3);
-
-                // Top-Right Locating Pin Hole (Dia 5mm)
-                const px = 45 * (width / 130), py = 18 * (height / 75), pr = 2.5 * (width / 130);
-                const pin = new THREE.Path();
-                pin.absarc(px, py, pr, 0, Math.PI * 2, true);
-                shape.holes.push(pin);
+                // 2. Add all slots
+                dSlots.forEach(s => {
+                    const sp = new THREE.Path();
+                    const hw = (s.w || 5.0) / 2.0;
+                    const hl = (s.len || 18.0) / 2.0;
+                    const sx = s.x || 0.0;
+                    const sy = s.y || 0.0;
+                    sp.moveTo(sx - hl, sy - hw);
+                    sp.lineTo(sx + hl, sy - hw);
+                    sp.lineTo(sx + hl, sy + hw);
+                    sp.lineTo(sx - hl, sy + hw);
+                    sp.closePath();
+                    shape.holes.push(sp);
+                });
 
                 const extrudeSettings = {
                     steps: 1,
                     depth: thickness,
                     bevelEnabled: true,
-                    bevelThickness: 0.3,
-                    bevelSize: 0.3,
+                    bevelThickness: 0.25,
+                    bevelSize: 0.25,
                     bevelSegments: 2
                 };
                 const plateGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
                 plateGeo.rotateX(-Math.PI / 2);
                 addPart(plateGeo, [0, thickness, 0]);
-            } else if (category === 'TURNED_SHAFT') {
-                // Stepped Cylindrical Shaft
-                const cyl1 = addPart(new THREE.CylinderGeometry(22.5, 22.5, 45, 32), [0, 0, 0], [0, 0, Math.PI/2]);
-                const cyl2 = addPart(new THREE.CylinderGeometry(17.5, 17.5, 40, 32), [42.5, 0, 0], [0, 0, Math.PI/2]);
-                const cyl3 = addPart(new THREE.CylinderGeometry(13.0, 13.0, 35, 32), [-40, 0, 0], [0, 0, Math.PI/2]);
 
-                // Keyway slot
-                const kw = new THREE.Mesh(new THREE.BoxGeometry(25, 4, 8), new THREE.MeshStandardMaterial({ color: 0x030712 }));
-                kw.position.set(40, 15, 0);
-                group.add(kw);
-            } else {
-                // Industrial Flange with PCD Holes
-                addPart(new THREE.CylinderGeometry(width/2, width/2, thickness, 36), [0, thickness/2, 0]);
+                // 3. Upright Flange / Raised Boss
                 if (flangeH > 0) {
-                    addPart(new THREE.CylinderGeometry(width * 0.3, width * 0.3, flangeH, 32), [0, thickness + flangeH/2, 0]);
-                }
-                const holeMat = new THREE.MeshStandardMaterial({ color: 0x030712 });
-                const bore = new THREE.Mesh(new THREE.CylinderGeometry(12, 12, thickness + flangeH + 2, 24), holeMat);
-                bore.position.set(0, (thickness + flangeH)/2, 0);
-                group.add(bore);
-
-                // PCD 4-bolt circle
-                const pcdR = width * 0.38;
-                for (let i = 0; i < 4; i++) {
-                    const angle = (i * Math.PI) / 2;
-                    const bh = new THREE.Mesh(new THREE.CylinderGeometry(5, 5, thickness + 2, 16), holeMat);
-                    bh.position.set(Math.cos(angle) * pcdR, thickness/2, Math.sin(angle) * pcdR);
-                    group.add(bh);
+                    const xs = pts.map(p => p[0]);
+                    const ys = pts.map(p => p[1]);
+                    const minX = Math.min(...xs), maxX = Math.max(...xs);
+                    const maxY = Math.max(...ys);
+                    const flangeW = (maxX - minX) * 0.65;
+                    const fx = minX + (maxX - minX) * 0.35;
+                    const flangeGeo = new THREE.BoxGeometry(flangeW, flangeH, Math.min(thickness, 4.0));
+                    addPart(flangeGeo, [fx, thickness + flangeH / 2, -maxY + Math.min(thickness, 4.0) / 2]);
                 }
             }
 
@@ -989,6 +874,7 @@ G0 Z15.000</div>
 
             currentContourPoints = null;
             currentDetectedHoles = null;
+            currentDetectedSlots = null;
             createProceduralCadModel(category, width, thickness, flangeH);
         }
 
@@ -1030,6 +916,7 @@ G0 Z15.000</div>
                     currentCategory = data.category;
                     currentContourPoints = data.contour_points || null;
                     currentDetectedHoles = data.detected_holes || null;
+                    currentDetectedSlots = data.detected_slots || null;
 
                     // 1. DYNAMICALLY UPDATE PARAMETERS FROM IMAGE
                     document.getElementById('targetWidth').value = data.target_width_mm;
@@ -1056,7 +943,7 @@ G0 Z15.000</div>
                     renderCamOperations(data.cam_operations, data.estimated_cycle_time);
 
                     // 4. UPDATE 3D VIEWPORT WITH UPLOADED PART GEOMETRY
-                    createProceduralCadModel(data.category, data.target_width_mm, data.base_thickness_mm, data.flange_height_mm, currentContourPoints, currentDetectedHoles);
+                    createProceduralCadModel(data.category, data.target_width_mm, data.base_thickness_mm, data.flange_height_mm, currentContourPoints, currentDetectedHoles, currentDetectedSlots);
 
                     // Update Telemetry
                     document.getElementById('telemetryCard').innerHTML = `
@@ -1080,7 +967,7 @@ G0 Z15.000</div>
             const w = parseFloat(document.getElementById('targetWidth').value) || 75.0;
             const t = parseFloat(document.getElementById('baseThickness').value) || 2.0;
             const fh = parseFloat(document.getElementById('flangeHeight').value) || 0.0;
-            createProceduralCadModel(currentCategory, w, t, fh, currentContourPoints, currentDetectedHoles);
+            createProceduralCadModel(currentCategory, w, t, fh, currentContourPoints, currentDetectedHoles, currentDetectedSlots);
         }
 
         function logBuild(msg) {
@@ -1131,7 +1018,7 @@ G0 Z15.000</div>
                     if (data.downloads && data.downloads.stl) {
                         await loadSTLModel(data.downloads.stl);
                     } else {
-                        createProceduralCadModel(currentCategory, parseFloat(w), parseFloat(t), parseFloat(fh), currentContourPoints, currentDetectedHoles);
+                        createProceduralCadModel(currentCategory, parseFloat(w), parseFloat(t), parseFloat(fh), currentContourPoints, currentDetectedHoles, currentDetectedSlots);
                     }
 
                     // 2. Update Telemetry Card with Real OCCT Solid Properties
