@@ -160,12 +160,73 @@ class FeaturePlanner:
 
     def _build_sheet_metal_bracket(self, doc, body, width: float, thickness: float, flange_h: float, params: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Builds formed sheet metal bracket matching part_2e95dec2.webp:
-        - Base plate (W x L) with 2 mounting holes
-        - 90-degree upright flange web (W x H)
-        - Top canopy return fold (90-deg lip)
-        - Central motor clearance bore & upper mounting holes
+        Builds formed sheet metal bracket matching the scanned image:
+        - If scanned contour points exist: extrudes true scanned base profile, adds upright flange web and scanned holes
+        - Fallback: builds standard formed bracket with base, flange, canopy fold, and holes
         """
+        scanned_pts = params.get("contour_points", [])
+        scanned_holes = params.get("detected_holes", [])
+
+        if len(scanned_pts) >= 4:
+            # 1. Base Pad using real scanned contour
+            sk1 = doc.addObject('Sketcher::SketchObject', 'ScannedBaseContour')
+            body.addObject(sk1)
+            for i in range(len(scanned_pts)):
+                p1 = scanned_pts[i]
+                p2 = scanned_pts[(i + 1) % len(scanned_pts)]
+                sk1.addGeometry(Part.LineSegment(App.Vector(p1[0], p1[1], 0), App.Vector(p2[0], p2[1], 0)))
+            doc.recompute()
+
+            pad1 = doc.addObject('PartDesign::Pad', 'SheetMetalBasePad')
+            body.addObject(pad1)
+            pad1.Profile = sk1
+            pad1.Length = thickness
+            doc.recompute()
+            self.plan_steps.append({"step": 1, "op": "Pad", "name": "SheetMetalBasePad", "length_mm": thickness, "vertices": len(scanned_pts)})
+
+            # 2. Upright Flange Web along back edge
+            xs = [p[0] for p in scanned_pts]
+            ys = [p[1] for p in scanned_pts]
+            min_x, max_x = min(xs), max(xs)
+            max_y = max(ys)
+            flange_len = (max_x - min_x) * 0.65
+            fx_start = min_x + (max_x - min_x) * 0.05
+
+            sk2 = doc.addObject('Sketcher::SketchObject', 'UprightFlange_Sk')
+            body.addObject(sk2)
+            sk2.AttachmentOffset = App.Placement(App.Vector(0, 0, thickness), App.Rotation(0, 0, 0))
+            flange_t = thickness
+            sk2.addGeometry(Part.LineSegment(App.Vector(fx_start, max_y - flange_t, 0), App.Vector(fx_start + flange_len, max_y - flange_t, 0)))
+            sk2.addGeometry(Part.LineSegment(App.Vector(fx_start + flange_len, max_y - flange_t, 0), App.Vector(fx_start + flange_len, max_y, 0)))
+            sk2.addGeometry(Part.LineSegment(App.Vector(fx_start + flange_len, max_y, 0), App.Vector(fx_start, max_y, 0)))
+            sk2.addGeometry(Part.LineSegment(App.Vector(fx_start, max_y, 0), App.Vector(fx_start, max_y - flange_t, 0)))
+            doc.recompute()
+
+            pad2 = doc.addObject('PartDesign::Pad', 'UprightFlangeWeb')
+            body.addObject(pad2)
+            pad2.Profile = sk2
+            pad2.Length = flange_h
+            doc.recompute()
+            self.plan_steps.append({"step": 2, "op": "Pad", "name": "UprightFlangeWeb", "length_mm": flange_h})
+
+            # 3. Add Scanned Holes
+            for idx, h in enumerate(scanned_holes):
+                hx = float(h.get("x", 0.0))
+                hy = float(h.get("y", 0.0))
+                dia = float(h.get("dia", 4.0))
+                self.fb.add_hole_subtraction(hx, hy, dia, thickness, True, f'ScannedHole_{idx+1}_Sk', f'MountingHole_{idx+1}')
+                self.plan_steps.append({"step": len(self.plan_steps) + 1, "op": "Hole", "name": f"MountingHole_{idx+1}", "dia_mm": dia})
+
+            doc.recompute()
+            val = GeometryValidator.validate_solid(body)
+            return {
+                "status": "success" if val["is_valid"] else "warning",
+                "body": body,
+                "steps_executed": len(self.plan_steps),
+                "plan_steps": self.plan_steps,
+                "validation": val
+            }
+
         hw = width / 2.0
         base_len = round(width * 0.64, 1)
 

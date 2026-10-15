@@ -105,6 +105,8 @@ class ImageToCadCamPipeline:
         combined_params.setdefault("corner_fillet_radius_mm", classification.get("corner_fillet_radius_mm", 14.0))
         combined_params.setdefault("base_thickness_mm", base_thickness_mm)
         combined_params.setdefault("flange_height_mm", flange_height_mm)
+        combined_params.setdefault("contour_points", classification.get("contour_points", []))
+        combined_params.setdefault("detected_holes", classification.get("detected_holes", []))
 
         # 5. Parametric CAD Reconstruction
         doc_mgr = DocumentManager("ReconstructedPart")

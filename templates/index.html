@@ -543,6 +543,8 @@ G0 Z15.000</div>
         let isWireframe = false;
         let currentFile = null;
         let currentCategory = 'SHEET_METAL_BRACKET';
+        let currentContourPoints = null;
+        let currentDetectedHoles = null;
 
         // 1. Initialize Three.js Viewport
         function init3D() {
@@ -700,7 +702,7 @@ G0 Z15.000</div>
         }
 
         // Procedural CAD Solid Generation (Accurate preview for Sheet Metal, Stamping, Shaft, Flange)
-        function createProceduralCadModel(category, width, thickness, flangeH) {
+        function createProceduralCadModel(category, width, thickness, flangeH, contourPoints = null, detectedHoles = null) {
             if (cadMesh) scene.remove(cadMesh);
 
             const group = new THREE.Group();
@@ -724,43 +726,87 @@ G0 Z15.000</div>
                 return m;
             }
 
+            const cPoints = contourPoints || currentContourPoints;
+            const dHoles = detectedHoles || currentDetectedHoles;
+
             if (category === 'SHEET_METAL_BRACKET') {
-                const baseL = width * 0.6;
-                // 1. Horizontal Base Plate
-                addPart(new THREE.BoxGeometry(width, thickness, baseL), [0, thickness/2, baseL/2]);
+                if (cPoints && cPoints.length >= 4) {
+                    const shape = new THREE.Shape();
+                    shape.moveTo(cPoints[0][0], cPoints[0][1]);
+                    for (let i = 1; i < cPoints.length; i++) {
+                        shape.lineTo(cPoints[i][0], cPoints[i][1]);
+                    }
+                    shape.closePath();
 
-                // 2. Base Mounting Holes (Visual Cylinders)
-                const holeMat = new THREE.MeshStandardMaterial({ color: 0x030712 });
-                const h1 = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.5, thickness + 0.2, 16), holeMat);
-                h1.position.set(-width * 0.28, thickness/2, baseL * 0.5);
-                group.add(h1);
-                const h2 = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.5, thickness + 0.2, 16), holeMat);
-                h2.position.set(width * 0.28, thickness/2, baseL * 0.5);
-                group.add(h2);
+                    if (dHoles && dHoles.length > 0) {
+                        dHoles.forEach(h => {
+                            const holePath = new THREE.Path();
+                            const r = Math.max(1.5, (h.dia || 4.0) / 2.0);
+                            holePath.absarc(h.x, h.y, r, 0, Math.PI * 2, true);
+                            shape.holes.push(holePath);
+                        });
+                    }
 
-                // 3. Upright Flange Web
-                if (flangeH > 0) {
-                    addPart(new THREE.BoxGeometry(width, flangeH, thickness), [0, thickness + flangeH/2, thickness/2]);
+                    const extrudeSettings = {
+                        steps: 1,
+                        depth: thickness,
+                        bevelEnabled: true,
+                        bevelThickness: 0.2,
+                        bevelSize: 0.2,
+                        bevelSegments: 2
+                    };
+                    const plateGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+                    plateGeo.rotateX(-Math.PI / 2);
+                    addPart(plateGeo, [0, thickness, 0]);
 
-                    // Central Motor Clearance Bore
-                    const bore = new THREE.Mesh(new THREE.CylinderGeometry(14, 14, thickness + 0.4, 24), holeMat);
-                    bore.rotation.x = Math.PI / 2;
-                    bore.position.set(0, thickness + flangeH * 0.52, thickness/2);
-                    group.add(bore);
+                    if (flangeH > 0) {
+                        const xs = cPoints.map(p => p[0]);
+                        const ys = cPoints.map(p => p[1]);
+                        const minX = Math.min(...xs), maxX = Math.max(...xs);
+                        const maxY = Math.max(...ys);
+                        const flangeW = (maxX - minX) * 0.65;
+                        const fx = minX + (maxX - minX) * 0.35;
+                        const flangeGeo = new THREE.BoxGeometry(flangeW, flangeH, thickness);
+                        addPart(flangeGeo, [fx, thickness + flangeH / 2, -maxY + thickness / 2]);
+                    }
+                } else {
+                    const baseL = width * 0.6;
+                    // 1. Horizontal Base Plate
+                    addPart(new THREE.BoxGeometry(width, thickness, baseL), [0, thickness/2, baseL/2]);
 
-                    // Upper mounting holes
-                    const uh1 = new THREE.Mesh(new THREE.CylinderGeometry(2.8, 2.8, thickness + 0.3, 16), holeMat);
-                    uh1.rotation.x = Math.PI / 2;
-                    uh1.position.set(-width * 0.28, thickness + flangeH * 0.82, thickness/2);
-                    group.add(uh1);
-                    const uh2 = new THREE.Mesh(new THREE.CylinderGeometry(2.8, 2.8, thickness + 0.3, 16), holeMat);
-                    uh2.rotation.x = Math.PI / 2;
-                    uh2.position.set(width * 0.28, thickness + flangeH * 0.82, thickness/2);
-                    group.add(uh2);
+                    // 2. Base Mounting Holes (Visual Cylinders)
+                    const holeMat = new THREE.MeshStandardMaterial({ color: 0x030712 });
+                    const h1 = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.5, thickness + 0.2, 16), holeMat);
+                    h1.position.set(-width * 0.28, thickness/2, baseL * 0.5);
+                    group.add(h1);
+                    const h2 = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.5, thickness + 0.2, 16), holeMat);
+                    h2.position.set(width * 0.28, thickness/2, baseL * 0.5);
+                    group.add(h2);
 
-                    // 4. Top Canopy Fold Lip
-                    const topLip = 16.0;
-                    addPart(new THREE.BoxGeometry(width * 0.6, thickness, topLip), [0, thickness + flangeH - thickness/2, -topLip/2 + thickness]);
+                    // 3. Upright Flange Web
+                    if (flangeH > 0) {
+                        addPart(new THREE.BoxGeometry(width, flangeH, thickness), [0, thickness + flangeH/2, thickness/2]);
+
+                        // Central Motor Clearance Bore
+                        const bore = new THREE.Mesh(new THREE.CylinderGeometry(14, 14, thickness + 0.4, 24), holeMat);
+                        bore.rotation.x = Math.PI / 2;
+                        bore.position.set(0, thickness + flangeH * 0.52, thickness/2);
+                        group.add(bore);
+
+                        // Upper mounting holes
+                        const uh1 = new THREE.Mesh(new THREE.CylinderGeometry(2.8, 2.8, thickness + 0.3, 16), holeMat);
+                        uh1.rotation.x = Math.PI / 2;
+                        uh1.position.set(-width * 0.28, thickness + flangeH * 0.82, thickness/2);
+                        group.add(uh1);
+                        const uh2 = new THREE.Mesh(new THREE.CylinderGeometry(2.8, 2.8, thickness + 0.3, 16), holeMat);
+                        uh2.rotation.x = Math.PI / 2;
+                        uh2.position.set(width * 0.28, thickness + flangeH * 0.82, thickness/2);
+                        group.add(uh2);
+
+                        // 4. Top Canopy Fold Lip
+                        const topLip = 16.0;
+                        addPart(new THREE.BoxGeometry(width * 0.6, thickness, topLip), [0, thickness + flangeH - thickness/2, -topLip/2 + thickness]);
+                    }
                 }
             } else if (category === 'STAMPED_COMPONENT') {
                 const height = width * 0.58;
@@ -941,6 +987,8 @@ G0 Z15.000</div>
                 { op: "CNC Press Brake 4-Axis Bending", tool: "Acute Punch 86° / V-Die 12mm", speed: "35 mm/s", details: "Primary 90° web fold & top canopy return lip" }
             ], "1m 15s");
 
+            currentContourPoints = null;
+            currentDetectedHoles = null;
             createProceduralCadModel(category, width, thickness, flangeH);
         }
 
@@ -980,6 +1028,8 @@ G0 Z15.000</div>
 
                 if (data.status === 'success') {
                     currentCategory = data.category;
+                    currentContourPoints = data.contour_points || null;
+                    currentDetectedHoles = data.detected_holes || null;
 
                     // 1. DYNAMICALLY UPDATE PARAMETERS FROM IMAGE
                     document.getElementById('targetWidth').value = data.target_width_mm;
@@ -1006,7 +1056,7 @@ G0 Z15.000</div>
                     renderCamOperations(data.cam_operations, data.estimated_cycle_time);
 
                     // 4. UPDATE 3D VIEWPORT WITH UPLOADED PART GEOMETRY
-                    createProceduralCadModel(data.category, data.target_width_mm, data.base_thickness_mm, data.flange_height_mm);
+                    createProceduralCadModel(data.category, data.target_width_mm, data.base_thickness_mm, data.flange_height_mm, currentContourPoints, currentDetectedHoles);
 
                     // Update Telemetry
                     document.getElementById('telemetryCard').innerHTML = `
@@ -1030,7 +1080,7 @@ G0 Z15.000</div>
             const w = parseFloat(document.getElementById('targetWidth').value) || 75.0;
             const t = parseFloat(document.getElementById('baseThickness').value) || 2.0;
             const fh = parseFloat(document.getElementById('flangeHeight').value) || 0.0;
-            createProceduralCadModel(currentCategory, w, t, fh);
+            createProceduralCadModel(currentCategory, w, t, fh, currentContourPoints, currentDetectedHoles);
         }
 
         function logBuild(msg) {
@@ -1081,7 +1131,7 @@ G0 Z15.000</div>
                     if (data.downloads && data.downloads.stl) {
                         await loadSTLModel(data.downloads.stl);
                     } else {
-                        createProceduralCadModel(currentCategory, parseFloat(w), parseFloat(t), parseFloat(fh));
+                        createProceduralCadModel(currentCategory, parseFloat(w), parseFloat(t), parseFloat(fh), currentContourPoints, currentDetectedHoles);
                     }
 
                     // 2. Update Telemetry Card with Real OCCT Solid Properties
