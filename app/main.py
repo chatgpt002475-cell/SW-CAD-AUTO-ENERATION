@@ -97,8 +97,12 @@ class ImageToCadCamPipeline:
         results["recognized_features"] = rec_features
         results["uncertainty_report"] = self.feature_recognizer.uncertainty.get_report()
 
-        # Merge user params
+        # Merge user params with auto-detected mechanical properties
         combined_params = user_params or {}
+        combined_params.setdefault("category", classification.get("category", ""))
+        combined_params.setdefault("target_width_mm", target_width_mm)
+        combined_params.setdefault("target_height_mm", classification.get("target_height_mm", round(target_width_mm * 0.58, 1)))
+        combined_params.setdefault("corner_fillet_radius_mm", classification.get("corner_fillet_radius_mm", 14.0))
         combined_params.setdefault("base_thickness_mm", base_thickness_mm)
         combined_params.setdefault("flange_height_mm", flange_height_mm)
 

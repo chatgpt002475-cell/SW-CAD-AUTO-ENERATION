@@ -85,7 +85,9 @@ def analyze_image():
     file.save(input_path)
 
     try:
-        calib_data = MechanicalPartClassifier.classify_and_calibrate(input_path)
+        ref_w = request.form.get("target_width_mm")
+        ref_w_val = float(ref_w) if ref_w else None
+        calib_data = MechanicalPartClassifier.classify_and_calibrate(input_path, reference_width_mm=ref_w_val)
         return jsonify({
             "status": "success",
             "job_id": job_id,
