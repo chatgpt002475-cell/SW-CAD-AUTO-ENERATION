@@ -43,15 +43,23 @@ class FeaturePlanner:
 
         # Step 2: Upright Flange (if present in features or parameters)
         flange_height = float(params.get("flange_height_mm", 0.0))
-        flange_thick = float(params.get("flange_thickness_mm", 10.0))
+        flange_thick = float(params.get("flange_thickness_mm", thickness))
         if flange_height > 0.0:
             sb_flange = self.fb.create_sketch("FlangeSketch", "XY_Plane", offset_z=thickness)
-            # Upright tab along back
-            flange_w = float(params.get("flange_width_mm", 80.0))
+            flange_w = float(params.get("flange_width_mm", 70.0))
             hw = flange_w / 2.0
-            sb_flange.add_polygon([(-hw, 10.0), (hw, 10.0), (hw, 10.0 + flange_thick), (-hw, 10.0 + flange_thick)])
-            self.fb.add_pad(sb_flange.get_sketch(), length_mm=flange_height, name="FlangePad")
-            self.plan_steps.append({"step": 2, "op": "Pad", "name": "FlangePad", "length_mm": flange_height})
+            sb_flange.add_polygon([(-hw, 0.0), (hw, 0.0), (hw, flange_thick), (-hw, flange_thick)])
+            self.fb.add_pad(sb_flange.get_sketch(), length_mm=flange_height, name="UprightFlangeWeb")
+            self.plan_steps.append({"step": 2, "op": "Pad", "name": "UprightFlangeWeb", "length_mm": flange_height})
+
+            # Step 2b: Top Canopy Return Lip for formed sheet metal
+            top_lip = float(params.get("top_lip_mm", 16.0 if flange_height >= 40.0 else 0.0))
+            if top_lip > 0.0:
+                sb_top = self.fb.create_sketch("TopCanopySketch", "XY_Plane", offset_z=thickness + flange_height)
+                hw_top = min(hw, 25.0)
+                sb_top.add_polygon([(-hw_top, 0.0), (hw_top, 0.0), (hw_top, top_lip), (-hw_top, top_lip)])
+                self.fb.add_pad(sb_top.get_sketch(), length_mm=thickness, name="TopCanopyFold")
+                self.plan_steps.append({"step": len(self.plan_steps) + 1, "op": "Pad", "name": "TopCanopyFold", "length_mm": thickness})
 
         # Step 3: Through-Holes
         for i, h in enumerate(holes):

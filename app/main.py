@@ -15,7 +15,9 @@ if APP_ROOT not in sys.path:
 
 from app.image_processing import ImagePreprocessor, ScaleCalibrator, ContourDetector, CircleDetector
 from app.reconstruction import FeatureRecognizer, FeaturePlanner, UncertaintyReporter
+from app.reconstruction.classifier import MechanicalPartClassifier
 from app.cad import DocumentManager, GeometryValidator, StepExporter, NativeProjectManager
+from app.cad.stl_export import StlExporter
 from app.cam import MachineConfig, ToolLibrary, MachiningSetup, OperationBuilder, ToolpathSimulator, GCodePostprocessor, GCodeValidator
 
 
@@ -38,20 +40,24 @@ class ImageToCadCamPipeline:
         output_step_path: Optional[str] = None,
         output_fcstd_path: Optional[str] = None,
         output_gcode_path: Optional[str] = None,
+        output_stl_path: Optional[str] = None,
         user_params: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Executes end-to-end pipeline:
-        Image -> Preprocessing -> Calibration -> Features -> CAD Solid -> Validation -> STEP -> CAM -> G-Code
+        Image -> Preprocessing -> Calibration -> Features -> CAD Solid -> Validation -> STEP -> STL -> CAM -> G-Code
         """
+        classification = MechanicalPartClassifier.classify_and_calibrate(image_path)
         results = {
             "status": "pending",
             "image_path": image_path,
+            "classification": classification,
             "calibration": None,
             "recognized_features": None,
             "uncertainty_report": None,
             "cad_validation": None,
             "step_export": None,
+            "stl_export": None,
             "fcstd_project": None,
             "cam_simulation": None,
             "gcode_validation": None,
@@ -119,6 +125,11 @@ class ImageToCadCamPipeline:
         if output_step_path:
             step_res = StepExporter.export_step(body, output_step_path)
             results["step_export"] = step_res
+
+        # 8b. STL Export for Web 3D Viewport
+        if output_stl_path:
+            stl_res = StlExporter.export_stl(body, output_stl_path)
+            results["stl_export"] = stl_res
 
         # 9. CNC CAM Setup & Operations
         bbox = val["bounding_box_mm"]

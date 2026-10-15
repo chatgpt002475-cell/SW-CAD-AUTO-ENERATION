@@ -15,6 +15,7 @@ if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
 from app.main import ImageToCadCamPipeline
+from app.reconstruction.classifier import MechanicalPartClassifier
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
@@ -63,6 +64,40 @@ def status():
     })
 
 
+@app.route("/api/analyze_image", methods=["POST"])
+def analyze_image():
+    """
+    Fast image analysis endpoint:
+    Classifies part category (Sheet Metal, Stamping, Shaft, Flange)
+    and returns auto-calibrated target width, thickness, and flange height.
+    """
+    if "image" not in request.files:
+        return jsonify({"error": "No image file provided"}), 400
+
+    file = request.files["image"]
+    if not file.filename:
+        return jsonify({"error": "Empty filename"}), 400
+
+    job_id = str(uuid.uuid4())[:8]
+    ext = os.path.splitext(file.filename)[1].lower() or ".png"
+    safe_name = f"preview_{job_id}{ext}"
+    input_path = os.path.join(UPLOAD_FOLDER, safe_name)
+    file.save(input_path)
+
+    try:
+        calib_data = MechanicalPartClassifier.classify_and_calibrate(input_path)
+        return jsonify({
+            "status": "success",
+            "job_id": job_id,
+            "filename": safe_name,
+            **calib_data
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 @app.route("/api/reconstruct", methods=["POST"])
 def reconstruct():
     if "image" not in request.files:
@@ -87,10 +122,12 @@ def reconstruct():
     step_name = f"cad_{job_id}.step"
     fcstd_name = f"cad_{job_id}.FCStd"
     gcode_name = f"cam_{job_id}.nc"
+    stl_name = f"cad_{job_id}.stl"
 
     step_path = os.path.join(OUTPUT_FOLDER, step_name)
     fcstd_path = os.path.join(OUTPUT_FOLDER, fcstd_name)
     gcode_path = os.path.join(OUTPUT_FOLDER, gcode_name)
+    stl_path = os.path.join(OUTPUT_FOLDER, stl_name)
 
     try:
         pipeline.machine_config.controller = controller
@@ -101,7 +138,8 @@ def reconstruct():
             flange_height_mm=flange_h_mm,
             output_step_path=step_path,
             output_fcstd_path=fcstd_path,
-            output_gcode_path=gcode_path
+            output_gcode_path=gcode_path,
+            output_stl_path=stl_path
         )
 
         # Read G-code sample lines
@@ -113,6 +151,7 @@ def reconstruct():
         response_data = {
             "status": results["status"],
             "job_id": job_id,
+            "classification": results.get("classification"),
             "calibration": results["calibration"],
             "recognized_features": results["recognized_features"],
             "uncertainty_report": results["uncertainty_report"],
@@ -123,7 +162,8 @@ def reconstruct():
             "downloads": {
                 "step": f"/api/download/{step_name}",
                 "fcstd": f"/api/download/{fcstd_name}",
-                "gcode": f"/api/download/{gcode_name}"
+                "gcode": f"/api/download/{gcode_name}",
+                "stl": f"/api/download/{stl_name}"
             }
         }
         return jsonify(response_data)
