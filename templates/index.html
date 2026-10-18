@@ -72,7 +72,8 @@
             display: grid;
             grid-template-columns: 350px 1fr 380px;
             grid-template-rows: 1fr 88px;
-            height: calc(100vh - 48px);
+            flex: 1;
+            min-height: 0;
             gap: 1px;
             background: var(--panel-border);
             transition: grid-template-rows 0.22s ease-in-out;
@@ -80,6 +81,137 @@
 
         .workspace.expanded-bottom {
             grid-template-rows: 1fr 220px;
+        }
+
+        /* Natural Language Search & Command Engine Bar */
+        .search-engine-bar {
+            background: #0b1324;
+            border-bottom: 1px solid var(--panel-border);
+            padding: 8px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            flex-shrink: 0;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+        }
+
+        .search-input-wrapper {
+            display: flex;
+            align-items: center;
+            background: #030712;
+            border: 1px solid #38bdf888;
+            border-radius: 8px;
+            padding: 3px 6px 3px 12px;
+            box-shadow: 0 0 12px rgba(56, 189, 248, 0.12);
+            transition: all 0.2s ease;
+        }
+
+        .search-input-wrapper:focus-within {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 18px rgba(56, 189, 248, 0.3);
+        }
+
+        .search-icon {
+            font-size: 1.05rem;
+            margin-right: 8px;
+            user-select: none;
+        }
+
+        #toolSearchInput {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: #f8fafc;
+            font-size: 0.88rem;
+            padding: 6px 4px;
+        }
+
+        #toolSearchInput::placeholder {
+            color: #64748b;
+            font-size: 0.82rem;
+        }
+
+        .search-btn {
+            background: linear-gradient(135deg, #0284c7, #2563eb);
+            color: white;
+            border: none;
+            padding: 7px 16px;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 0.82rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .search-btn:hover {
+            background: linear-gradient(135deg, #38bdf8, #1d4ed8);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+        }
+
+        .search-tags {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+            font-size: 0.72rem;
+        }
+
+        .tag-label {
+            color: var(--text-muted);
+            font-weight: 600;
+            margin-right: 2px;
+            font-size: 0.72rem;
+        }
+
+        .tag-pill {
+            background: #1e293b;
+            color: #cbd5e1;
+            border: 1px solid #334155;
+            padding: 2px 9px;
+            border-radius: 12px;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.15s;
+            font-size: 0.71rem;
+            font-family: monospace;
+        }
+
+        .tag-pill:hover {
+            background: #0284c728;
+            color: var(--accent-blue);
+            border-color: var(--accent-blue);
+            transform: translateY(-1px);
+        }
+
+        .search-feedback-toast {
+            background: #0284c718;
+            border: 1px solid #38bdf860;
+            color: #38bdf8;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-family: monospace;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            animation: fadeIn 0.2s ease-in-out;
+        }
+
+        .search-feedback-toast .close-toast {
+            cursor: pointer;
+            color: #94a3b8;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+
+        .search-feedback-toast .close-toast:hover {
+            color: #fff;
         }
 
         .panel {
@@ -402,6 +534,31 @@
             <span class="badge">Repo: chatgpt002475-cell/SW-CAD-AUTO-ENERATION</span>
         </div>
     </header>
+
+    <!-- Natural Language Search & Command Engine Bar -->
+    <div class="search-engine-bar">
+        <div class="search-input-wrapper">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="toolSearchInput" placeholder="Ask or command anything in natural language (e.g. 'set width to 140mm', 'change thickness to 3mm', 'flange height 45mm', 'switch to Haas CNC', 'toggle wireframe', 'top view', 'reconstruct 3D solid', 'what is the volume?')..." onkeydown="if(event.key==='Enter') executeSearchCommand()">
+            <button class="search-btn" onclick="executeSearchCommand()">
+                <span>⚡ Run Command</span>
+            </button>
+        </div>
+        <div class="search-tags">
+            <span class="tag-label">Smart Commands:</span>
+            <span class="tag-pill" onclick="quickApply('set target width to 120mm')">📏 Width = 120mm</span>
+            <span class="tag-pill" onclick="quickApply('set base thickness to 3.5mm')">📐 Thickness = 3.5mm</span>
+            <span class="tag-pill" onclick="quickApply('set flange height to 50mm')">🏗️ Flange = 50mm</span>
+            <span class="tag-pill" onclick="quickApply('switch to Haas controller')">⚙️ CNC: Haas</span>
+            <span class="tag-pill" onclick="quickApply('switch to Fanuc controller')">⚙️ CNC: Fanuc</span>
+            <span class="tag-pill" onclick="quickApply('toggle wireframe')">👁️ Wireframe</span>
+            <span class="tag-pill" onclick="quickApply('top view')">📐 Top View</span>
+            <span class="tag-pill" onclick="quickApply('reconstruct 3d parametric cad')">🚀 Reconstruct CAD</span>
+            <span class="tag-pill" onclick="quickApply('what is the volume and dimensions?')">ℹ️ Volume & Specs</span>
+            <span class="tag-pill" onclick="quickApply('download step file')">💾 Download STEP</span>
+        </div>
+        <div id="searchFeedbackToast" class="search-feedback-toast" style="display:none;"></div>
+    </div>
 
     <div class="workspace" id="workspaceContainer">
 
@@ -1095,21 +1252,200 @@ G0 Z15.000</div>
             }
         }
 
+        // =========================================================================
+        // NATURAL LANGUAGE SEARCH & COMMAND ENGINE
+        // =========================================================================
+        function showSearchToast(htmlContent, isError = false) {
+            const toast = document.getElementById('searchFeedbackToast');
+            toast.style.display = 'flex';
+            toast.style.borderColor = isError ? '#f87171' : '#38bdf860';
+            toast.style.color = isError ? '#f87171' : '#38bdf8';
+            toast.style.background = isError ? '#ef444415' : '#0284c718';
+            toast.innerHTML = `<span>${htmlContent}</span><span class="close-toast" onclick="document.getElementById('searchFeedbackToast').style.display='none'">✕</span>`;
+        }
+
+        function quickApply(cmdText) {
+            document.getElementById('toolSearchInput').value = cmdText;
+            executeSearchCommand();
+        }
+
+        async function executeSearchCommand() {
+            const inputEl = document.getElementById('toolSearchInput');
+            const query = (inputEl.value || '').trim();
+            if (!query) {
+                showSearchToast("⚠️ Please enter a command or question (e.g. 'set width to 130mm', 'switch to Haas', 'wireframe', 'top view').", true);
+                return;
+            }
+
+            const qLower = query.toLowerCase();
+            const appliedActions = [];
+            let paramsChanged = false;
+
+            // 1. Target Width Extraction
+            const wMatch = qLower.match(/(?:width|target\s*width|w)\s*(?:to|=)?\s*([0-9]+(?:\.[0-9]+)?)/i);
+            if (wMatch && wMatch[1]) {
+                const newW = parseFloat(wMatch[1]);
+                document.getElementById('targetWidth').value = newW;
+                appliedActions.push(`Target Width = ${newW} mm`);
+                paramsChanged = true;
+            }
+
+            // 2. Base Thickness / Gauge Extraction
+            const tMatch = qLower.match(/(?:thickness|gauge|thick|base\s*thickness|t)\s*(?:to|=)?\s*([0-9]+(?:\.[0-9]+)?)/i);
+            if (tMatch && tMatch[1]) {
+                const newT = parseFloat(tMatch[1]);
+                document.getElementById('baseThickness').value = newT;
+                appliedActions.push(`Base Thickness = ${newT} mm`);
+                paramsChanged = true;
+            }
+
+            // 3. Flange Height Extraction
+            const fMatch = qLower.match(/(?:flange|flange\s*height|height|fh)\s*(?:to|=)?\s*([0-9]+(?:\.[0-9]+)?)/i);
+            if (fMatch && fMatch[1]) {
+                const newF = parseFloat(fMatch[1]);
+                document.getElementById('flangeHeight').value = newF;
+                appliedActions.push(`Flange Height = ${newF} mm`);
+                paramsChanged = true;
+            }
+
+            // 4. CNC Controller Dialect
+            const ctrlSelect = document.getElementById('cncController');
+            if (qLower.includes('fanuc')) {
+                ctrlSelect.value = 'Fanuc';
+                appliedActions.push('Controller switched to Fanuc G-Code');
+            } else if (qLower.includes('haas')) {
+                ctrlSelect.value = 'Haas';
+                appliedActions.push('Controller switched to Haas Machining Dialect');
+            } else if (qLower.includes('grbl')) {
+                ctrlSelect.value = 'GRBL';
+                appliedActions.push('Controller switched to GRBL Dialect');
+            } else if (qLower.includes('linuxcnc') || (qLower.includes('linux') && !qLower.includes('width'))) {
+                ctrlSelect.value = 'LinuxCNC';
+                appliedActions.push('Controller switched to LinuxCNC Dialect');
+            }
+
+            // 5. 3D Viewport Controls & Camera
+            if (qLower.includes('wireframe') || qLower.includes('wire') || qLower.includes('shade') || qLower.includes('shaded')) {
+                toggleWireframe();
+                appliedActions.push(isWireframe ? 'Viewport wireframe enabled' : 'Viewport shaded surface enabled');
+            }
+
+            if (qLower.includes('top view') || qLower.includes('view top') || qLower.includes('xy plane')) {
+                setView('top');
+                appliedActions.push('Camera set to Top View (XY Plane)');
+            } else if (qLower.includes('front view') || qLower.includes('view front') || qLower.includes('xz plane')) {
+                setView('front');
+                appliedActions.push('Camera set to Front View (XZ Plane)');
+            } else if (qLower.includes('side view') || qLower.includes('view side') || qLower.includes('yz plane') || qLower.includes('right view')) {
+                setView('side');
+                appliedActions.push('Camera set to Side View (YZ Plane)');
+            } else if (qLower.includes('isometric') || qLower.includes('iso view') || qLower.includes('reset view') || qLower.includes('default view')) {
+                setView('iso');
+                appliedActions.push('Camera set to Isometric View');
+            }
+
+            // 6. Reconstruction / Pipeline Execution
+            if (qLower.includes('reconstruct') || qLower.includes('generate cad') || qLower.includes('build solid') || qLower.includes('build 3d') || qLower.includes('generate step')) {
+                runReconstruction();
+                appliedActions.push('Triggered 3D CAD Reconstruction Pipeline');
+            }
+
+            // 7. Download commands
+            if (qLower.includes('download step') || qLower.includes('export step')) {
+                const btn = document.getElementById('btnStep');
+                if (btn && btn.href && btn.href !== '#' && !btn.href.endsWith('#')) {
+                    btn.click();
+                    appliedActions.push('Triggered STEP file download');
+                } else {
+                    appliedActions.push('STEP file will be available after reconstruction');
+                }
+            } else if (qLower.includes('download stl') || qLower.includes('export stl')) {
+                const btn = document.getElementById('btnStl');
+                if (btn && btn.href && btn.href !== '#' && !btn.href.endsWith('#')) {
+                    btn.click();
+                    appliedActions.push('Triggered STL mesh download');
+                }
+            } else if (qLower.includes('download gcode') || qLower.includes('export gcode')) {
+                const btn = document.getElementById('btnGcode');
+                if (btn && btn.href && btn.href !== '#' && !btn.href.endsWith('#')) {
+                    btn.click();
+                    appliedActions.push('Triggered CNC G-code download');
+                }
+            }
+
+            // 8. Bottom panel expand / collapse
+            if (qLower.includes('expand console') || qLower.includes('expand logs') || qLower.includes('collapse console')) {
+                toggleBottomPanel();
+                appliedActions.push('Toggled bottom log console height');
+            }
+
+            // Update 3D viewport immediately if dimensions changed
+            if (paramsChanged) {
+                onParamChange();
+            }
+
+            // 9. Informational Queries (Volume, Material, Dimensions)
+            let queryInfoText = '';
+            if (qLower.includes('volume') || qLower.includes('dimension') || qLower.includes('area') || qLower.includes('specs') || qLower.includes('material') || qLower.includes('what is')) {
+                const curW = document.getElementById('targetWidth').value;
+                const curT = document.getElementById('baseThickness').value;
+                const curF = document.getElementById('flangeHeight').value;
+                const curCtrl = document.getElementById('cncController').value;
+                const telem = document.getElementById('telemetryCard').innerText.replace(/\n/g, ' | ');
+                queryInfoText = `📊 <b>Model Specs:</b> Envelope: ${curW}mm (W) x ${curT}mm (T) x ${curF}mm (Flange) | Dialect: ${curCtrl} | ${telem}`;
+            }
+
+            // 10. Format and display output
+            if (appliedActions.length > 0 || queryInfoText) {
+                let msg = '';
+                if (appliedActions.length > 0) {
+                    msg = `✅ <b>Search Engine Executed:</b> ${appliedActions.join(' • ')}`;
+                    logBuild(`[Search Engine] Command: "${query}" -> Executed: ${appliedActions.join(', ')}`);
+                }
+                if (queryInfoText) {
+                    msg = msg ? `${msg}<br>${queryInfoText}` : queryInfoText;
+                    logBuild(`[Search Engine] Query: "${query}" -> Response provided.`);
+                }
+                showSearchToast(msg);
+            } else {
+                // Send to backend /api/ai_command for natural language fallback
+                try {
+                    const res = await fetch('/api/ai_command', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ query: query })
+                    });
+                    const d = await res.json();
+                    if (d.status === 'success' && d.actions && d.actions.length > 0) {
+                        showSearchToast(`✅ <b>AI Engine:</b> ${d.message}`);
+                        logBuild(`[Search Engine AI] ${d.message}`);
+                    } else {
+                        showSearchToast(`ℹ️ Command received: "${query}". You can ask to change width, thickness, flange, view, CNC controller, or reconstruct 3D solid.`);
+                        logBuild(`[Search Engine] Unrecognized command pattern: "${query}"`);
+                    }
+                } catch (e) {
+                    showSearchToast(`ℹ️ Command: "${query}". Try: 'set width to 140mm', 'flange 45mm', 'switch to Haas', 'wireframe', 'top view'.`);
+                }
+            }
+        }
+
         function resetView() {
             setView('iso');
         }
 
         function onWindowResize() {
             const container = document.getElementById('cadCanvas');
-            camera.aspect = container.clientWidth / container.clientHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(container.clientWidth, container.clientHeight);
+            if (container && camera && renderer) {
+                camera.aspect = container.clientWidth / container.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(container.clientWidth, container.clientHeight);
+            }
         }
 
         function animate() {
             requestAnimationFrame(animate);
-            controls.update();
-            renderer.render(scene, camera);
+            if (controls) controls.update();
+            if (renderer && scene && camera) renderer.render(scene, camera);
         }
 
         window.onload = init3D;
