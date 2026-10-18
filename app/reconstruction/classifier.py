@@ -338,13 +338,34 @@ class MechanicalPartClassifier:
         cycle_min = max(1, int(len(feature_tree) * 0.35 + 0.5))
         est_cycle_time = f"{cycle_min}m {int(len(contour_mm) * 1.5)}s"
 
+        # 10. Sheet Metal Bend Calculation (DIN 6935 / ISO 7453)
+        r_in = round(max(1.5, 1.25 * calc_thickness), 2)
+        r_out = round(r_in + calc_thickness, 2)
+        k_factor = 0.42
+        angle_rad = np.pi / 2.0
+        bend_allowance = round(float(angle_rad * (r_in + k_factor * calc_thickness)), 2)
+        setback = round(float((r_in + calc_thickness) * np.tan(angle_rad / 2.0)), 2)
+        bend_deduction = round(float(2.0 * setback - bend_allowance), 2)
+        flat_blank_len = round(float(target_h + calc_flange_h - bend_deduction), 2)
+
+        bend_calculation = {
+            "inner_bend_radius_mm": r_in,
+            "outer_bend_radius_mm": r_out,
+            "neutral_axis_k_factor": k_factor,
+            "bend_angle_deg": 90.0,
+            "bend_allowance_mm": bend_allowance,
+            "outside_setback_mm": setback,
+            "bend_deduction_mm": bend_deduction,
+            "developed_flat_blank_length_mm": flat_blank_len
+        }
+
         return {
+            "status": "success",
             "category": category,
             "display_name": display_name,
-            "badge_text": f"{display_name} ({bw}x{bh}px | {len(contour_mm)} Vertices | {len(holes_mm)} Holes | {len(slots_mm)} Slots)",
             "image_measurements": {
-                "width_px": round(float(bw), 1),
-                "height_px": round(float(bh), 1),
+                "width_px": bw,
+                "height_px": bh,
                 "aspect_ratio": round(aspect_ratio, 2),
                 "edge_thickness_px": round(edge_thickness_px, 1),
                 "holes_detected": len(holes_mm),
@@ -362,7 +383,8 @@ class MechanicalPartClassifier:
             "material": "Structural Mild Steel (SPCC / 1018) or 6061-T6 Aluminum",
             "feature_tree": feature_tree,
             "cam_operations": cam_operations,
-            "estimated_cycle_time": est_cycle_time
+            "estimated_cycle_time": est_cycle_time,
+            "bend_calculation": bend_calculation
         }
 
     @staticmethod

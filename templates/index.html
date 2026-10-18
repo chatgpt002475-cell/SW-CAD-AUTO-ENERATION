@@ -546,6 +546,8 @@
         </div>
         <div class="search-tags">
             <span class="tag-label">Smart Commands:</span>
+            <span class="tag-pill" onclick="quickApply('increase thickness')">➕ Increase Thickness (+1mm)</span>
+            <span class="tag-pill" onclick="quickApply('calculate bend radius and allowance')">📐 Bend Radius & Depth</span>
             <span class="tag-pill" onclick="quickApply('set target width to 120mm')">📏 Width = 120mm</span>
             <span class="tag-pill" onclick="quickApply('set base thickness to 3.5mm')">📐 Thickness = 3.5mm</span>
             <span class="tag-pill" onclick="quickApply('set flange height to 50mm')">🏗️ Flange = 50mm</span>
@@ -897,6 +899,99 @@ G0 Z15.000</div>
                 const kw = new THREE.Mesh(new THREE.BoxGeometry(length * 0.2, 4, 8), new THREE.MeshStandardMaterial({ color: 0x030712 }));
                 kw.position.set(length * 0.3, width * 0.18, 0);
                 group.add(kw);
+            } else if (category === 'FORMED_SHEET_METAL_BRACKET' || category === 'SHEET_METAL_BRACKET' || flangeH > 25.0) {
+                // =========================================================================
+                // AUTHENTIC FORMED SHEET METAL BRACKET WITH CALCULATED BEND RADIUS & DEPTH
+                // =========================================================================
+                const t = Math.max(0.8, thickness);
+                const rIn = Math.max(1.5, 1.25 * t);
+                const rOut = rIn + t;
+                const depth = width * 0.58;
+                const h = Math.max(30.0, flangeH > 0 ? flangeH : width * 0.52);
+                const hw = width / 2.0;
+
+                // 1. Horizontal Base Plate with mounting holes and slots
+                const baseShape = new THREE.Shape();
+                baseShape.moveTo(-hw, 0);
+                baseShape.lineTo(hw, 0);
+                baseShape.lineTo(hw, -depth);
+                baseShape.lineTo(-hw, -depth);
+                baseShape.closePath();
+
+                // Add base mounting slots & holes
+                const sOffset = width * 0.28;
+                const s1 = new THREE.Path();
+                s1.absarc(-sOffset, -depth * 0.65, Math.min(5.0, width * 0.035), 0, Math.PI * 2, true);
+                baseShape.holes.push(s1);
+                const s2 = new THREE.Path();
+                s2.absarc(sOffset, -depth * 0.65, Math.min(5.0, width * 0.035), 0, Math.PI * 2, true);
+                baseShape.holes.push(s2);
+
+                const baseGeo = new THREE.ExtrudeGeometry(baseShape, { depth: t, bevelEnabled: false });
+                baseGeo.rotateX(-Math.PI / 2);
+                addPart(baseGeo, [0, t, 0]);
+
+                // 2. Authentic Curved 90° Sheet Metal Bend Arc (R_in, R_out)
+                const bendGeo = new THREE.CylinderGeometry(rOut, rOut, width, 24, 1, false, Math.PI, Math.PI / 2);
+                bendGeo.rotateZ(Math.PI / 2);
+                addPart(bendGeo, [0, t + rIn, 0]);
+
+                // 3. Upright Vertical Web with Central Clearance Bore & Upper Holes
+                const webShape = new THREE.Shape();
+                webShape.moveTo(-hw, 0);
+                webShape.lineTo(hw, 0);
+                webShape.lineTo(hw, h);
+                webShape.lineTo(-hw, h);
+                webShape.closePath();
+
+                // Central motor/wiring clearance bore
+                const boreR = Math.min(width * 0.18, 18.0);
+                const borePath = new THREE.Path();
+                borePath.absarc(0, h * 0.52, boreR, 0, Math.PI * 2, true);
+                webShape.holes.push(borePath);
+
+                // Upper mounting holes (2x)
+                const uhOffset = width * 0.34;
+                const uh1 = new THREE.Path();
+                uh1.absarc(-uhOffset, h * 0.78, 2.8, 0, Math.PI * 2, true);
+                webShape.holes.push(uh1);
+                const uh2 = new THREE.Path();
+                uh2.absarc(uhOffset, h * 0.78, 2.8, 0, Math.PI * 2, true);
+                webShape.holes.push(uh2);
+
+                const webGeo = new THREE.ExtrudeGeometry(webShape, { depth: t, bevelEnabled: false });
+                addPart(webGeo, [0, t, -t]);
+
+                // 4. Top Folded Canopy Return Lip (90° forward fold)
+                const canopyW = width * 0.65;
+                const canopyLen = Math.min(25.0, depth * 0.35);
+                const canopyShape = new THREE.Shape();
+                canopyShape.moveTo(-canopyW / 2.0, 0);
+                canopyShape.lineTo(canopyW / 2.0, 0);
+                canopyShape.lineTo(canopyW / 2.0, canopyLen);
+                canopyShape.lineTo(-canopyW / 2.0, canopyLen);
+                canopyShape.closePath();
+
+                const canopyGeo = new THREE.ExtrudeGeometry(canopyShape, { depth: t, bevelEnabled: false });
+                canopyGeo.rotateX(-Math.PI / 2);
+                addPart(canopyGeo, [0, h + t, -canopyLen - t]);
+
+                // 5. Side Bent Ear Flange (90° folded mounting tab with hole)
+                const earH = Math.min(45.0, h * 0.48);
+                const earD = Math.min(38.0, depth * 0.52);
+                const earShape = new THREE.Shape();
+                earShape.moveTo(0, 0);
+                earShape.lineTo(earD, 0);
+                earShape.lineTo(earD, earH);
+                earShape.lineTo(0, earH);
+                earShape.closePath();
+                const earHole = new THREE.Path();
+                earHole.absarc(earD * 0.5, earH * 0.5, 3.2, 0, Math.PI * 2, true);
+                earShape.holes.push(earHole);
+
+                const earGeo = new THREE.ExtrudeGeometry(earShape, { depth: t, bevelEnabled: false });
+                earGeo.rotateY(Math.PI / 2);
+                addPart(earGeo, [hw - t, t, -earD]);
             } else {
                 // Universal Prismatic / Contoured / Multi-Feature Mechanical Solid
                 let pts = cPoints;
@@ -1299,6 +1394,40 @@ G0 Z15.000</div>
                 paramsChanged = true;
             }
 
+            // 2b. Relative adjustments for thickness (e.g. "increase thickness", "thicker", "reduce thickness")
+            if (!tMatch) {
+                if (qLower.includes('increase thickness') || qLower.includes('more thickness') || qLower.includes('thicker') || qLower.includes('add thickness') || qLower.includes('higher thickness')) {
+                    const curT = parseFloat(document.getElementById('baseThickness').value) || 2.0;
+                    const newT = Math.round((curT + 1.0) * 10) / 10;
+                    document.getElementById('baseThickness').value = newT;
+                    appliedActions.push(`Increased Base Thickness to ${newT} mm (+1.0mm)`);
+                    paramsChanged = true;
+                } else if (qLower.includes('decrease thickness') || qLower.includes('reduce thickness') || qLower.includes('thinner') || qLower.includes('less thickness')) {
+                    const curT = parseFloat(document.getElementById('baseThickness').value) || 2.0;
+                    const newT = Math.max(0.5, Math.round((curT - 1.0) * 10) / 10);
+                    document.getElementById('baseThickness').value = newT;
+                    appliedActions.push(`Decreased Base Thickness to ${newT} mm (-1.0mm)`);
+                    paramsChanged = true;
+                }
+            }
+
+            // 1b. Relative adjustments for width (e.g. "increase width", "wider", "narrower")
+            if (!wMatch) {
+                if (qLower.includes('increase width') || qLower.includes('wider') || qLower.includes('more width') || qLower.includes('expand width')) {
+                    const curW = parseFloat(document.getElementById('targetWidth').value) || 120.0;
+                    const newW = Math.round((curW + 10.0) * 10) / 10;
+                    document.getElementById('targetWidth').value = newW;
+                    appliedActions.push(`Increased Target Width to ${newW} mm (+10mm)`);
+                    paramsChanged = true;
+                } else if (qLower.includes('decrease width') || qLower.includes('narrower') || qLower.includes('reduce width')) {
+                    const curW = parseFloat(document.getElementById('targetWidth').value) || 120.0;
+                    const newW = Math.max(20.0, Math.round((curW - 10.0) * 10) / 10);
+                    document.getElementById('targetWidth').value = newW;
+                    appliedActions.push(`Decreased Target Width to ${newW} mm (-10mm)`);
+                    paramsChanged = true;
+                }
+            }
+
             // 3. Flange Height Extraction
             const fMatch = qLower.match(/(?:flange|flange\s*height|height|fh)\s*(?:to|=)?\s*([0-9]+(?:\.[0-9]+)?)/i);
             if (fMatch && fMatch[1]) {
@@ -1306,6 +1435,39 @@ G0 Z15.000</div>
                 document.getElementById('flangeHeight').value = newF;
                 appliedActions.push(`Flange Height = ${newF} mm`);
                 paramsChanged = true;
+            }
+
+            // 3b. Relative adjustments for flange height
+            if (!fMatch) {
+                if (qLower.includes('increase flange') || qLower.includes('higher flange') || qLower.includes('more flange') || qLower.includes('taller flange')) {
+                    const curF = parseFloat(document.getElementById('flangeHeight').value) || 50.0;
+                    const newF = Math.round((curF + 10.0) * 10) / 10;
+                    document.getElementById('flangeHeight').value = newF;
+                    appliedActions.push(`Increased Flange Height to ${newF} mm (+10mm)`);
+                    paramsChanged = true;
+                } else if (qLower.includes('decrease flange') || qLower.includes('lower flange') || qLower.includes('shorter flange')) {
+                    const curF = parseFloat(document.getElementById('flangeHeight').value) || 50.0;
+                    const newF = Math.max(0.0, Math.round((curF - 10.0) * 10) / 10);
+                    document.getElementById('flangeHeight').value = newF;
+                    appliedActions.push(`Decreased Flange Height to ${newF} mm (-10mm)`);
+                    paramsChanged = true;
+                }
+            }
+
+            // 3c. Sheet Metal Bend Calculation (DIN 6935 / ISO 7453)
+            if (qLower.includes('bend') || qLower.includes('radius') || qLower.includes('k factor') || qLower.includes('k-factor') || qLower.includes('allowance') || qLower.includes('setback') || qLower.includes('deduction')) {
+                const curT = parseFloat(document.getElementById('baseThickness').value) || 2.0;
+                const curW = parseFloat(document.getElementById('targetWidth').value) || 120.0;
+                const curF = parseFloat(document.getElementById('flangeHeight').value) || 60.0;
+                const rIn = Math.round(Math.max(1.5, 1.25 * curT) * 100) / 100;
+                const rOut = Math.round((rIn + curT) * 100) / 100;
+                const kFact = 0.42;
+                const angleRad = Math.PI / 2.0;
+                const ba = Math.round(angleRad * (rIn + kFact * curT) * 100) / 100;
+                const ossb = Math.round((rIn + curT) * 100) / 100;
+                const bd = Math.round((2.0 * ossb - ba) * 100) / 100;
+                const flatBlank = Math.round((curW * 0.58 + curF - bd) * 10) / 10;
+                appliedActions.push(`Sheet Metal Bend Calculation (DIN 6935): R_in=${rIn}mm, R_out=${rOut}mm, K=${kFact}, Bend Allowance BA=${ba}mm, Outside Setback OSSB=${ossb}mm, Bend Deduction BD=${bd}mm, Flat Blank Developed=${flatBlank}mm`);
             }
 
             // 4. CNC Controller Dialect

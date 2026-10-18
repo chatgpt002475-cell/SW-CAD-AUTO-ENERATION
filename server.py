@@ -191,7 +191,7 @@ def ai_command():
     changes = {}
     actions = []
 
-    # 1. Parameter extraction
+    # 1. Parameter extraction (explicit values)
     import re
     w_match = re.search(r'(?:width|w|target\s*width)\s*(?:to|=)?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:mm)?', q_lower)
     if w_match:
@@ -210,6 +210,43 @@ def ai_command():
         val = float(f_match.group(1))
         changes["flange_height_mm"] = val
         actions.append(f"Set flange height to {val} mm")
+
+    # 1b. Relative / Incremental Adjustments (e.g. "increase thickness", "wider", "thinner")
+    if not t_match:
+        if any(k in q_lower for k in ["increase thickness", "more thickness", "thicker", "add thickness", "higher thickness"]):
+            changes["base_thickness_delta"] = 1.0
+            actions.append("Increased base plate thickness by +1.0 mm")
+        elif any(k in q_lower for k in ["decrease thickness", "reduce thickness", "thinner", "less thickness", "lower thickness"]):
+            changes["base_thickness_delta"] = -1.0
+            actions.append("Decreased base plate thickness by -1.0 mm")
+
+    if not w_match:
+        if any(k in q_lower for k in ["increase width", "more width", "wider", "expand width"]):
+            changes["target_width_delta"] = 10.0
+            actions.append("Increased part target width by +10.0 mm")
+        elif any(k in q_lower for k in ["decrease width", "reduce width", "narrower", "smaller width"]):
+            changes["target_width_delta"] = -10.0
+            actions.append("Decreased part target width by -10.0 mm")
+
+    if not f_match:
+        if any(k in q_lower for k in ["increase flange", "higher flange", "more flange", "taller flange"]):
+            changes["flange_height_delta"] = 10.0
+            actions.append("Increased flange height by +10.0 mm")
+        elif any(k in q_lower for k in ["decrease flange", "lower flange", "shorter flange", "reduce flange"]):
+            changes["flange_height_delta"] = -10.0
+            actions.append("Decreased flange height by -10.0 mm")
+
+    # 1c. Sheet Metal Bend Calculations & Audits
+    if any(k in q_lower for k in ["bend", "radius", "k factor", "k-factor", "allowance", "setback", "deduction"]):
+        cur_t = float(data.get("current_thickness") or 2.0)
+        r_in = round(max(1.5, 1.25 * cur_t), 2)
+        r_out = round(r_in + cur_t, 2)
+        k_fact = 0.42
+        angle_rad = 3.14159 / 2.0
+        ba = round(angle_rad * (r_in + k_fact * cur_t), 2)
+        ossb = round(r_in + cur_t, 2)
+        bd = round(2.0 * ossb - ba, 2)
+        actions.append(f"Sheet Metal Bend Calculation (T={cur_t}mm): R_in={r_in}mm, R_out={r_out}mm, K=0.42, Bend Allowance={ba}mm, Setback={ossb}mm, Bend Deduction={bd}mm")
 
     # 2. Controller Dialect
     if "fanuc" in q_lower:
@@ -236,7 +273,7 @@ def ai_command():
         actions.append("set_view_side")
     if any(k in q_lower for k in ["iso", "isometric", "reset view"]):
         actions.append("set_view_iso")
-    if any(k in q_lower for k in ["reconstruct", "generate cad", "build 3d", "remaster"]):
+    if any(k in q_lower for k in ["reconstruct", "generate cad", "build 3d", "remaster", "seetetal"]):
         actions.append("run_reconstruction")
 
     # 4. Answers / Queries
