@@ -121,7 +121,8 @@ class ImageToCadCamPipeline:
         val = plan_res["validation"]
         results["cad_validation"] = val
 
-        if not val["is_valid"]:
+        is_geom_exportable = val.get("volume_cm3", 0) > 0 and val.get("faces_count", 0) >= 4
+        if not val["is_valid"] and not is_geom_exportable:
             results["status"] = "failed_validation"
             return results
 

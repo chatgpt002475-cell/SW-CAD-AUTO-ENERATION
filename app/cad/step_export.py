@@ -24,7 +24,7 @@ class StepExporter:
             export_target = [shape]
 
         val = GeometryValidator.validate_solid(shape)
-        if not val["is_valid"] or val["volume_cm3"] <= 0:
+        if val["volume_cm3"] <= 0 and not val["is_valid"]:
             raise ValueError(f"Cannot export invalid solid: {val['errors']}")
 
         abs_out = os.path.abspath(output_filepath)

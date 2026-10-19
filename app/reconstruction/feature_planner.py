@@ -49,11 +49,13 @@ class FeaturePlanner:
         if is_revolved:
             return self._build_turned_shaft(doc, body, width, thickness, params)
 
-        # Check if Formed Sheet Metal Bracket / Enclosure
-        if category in ["FORMED_SHEET_METAL_BRACKET", "SHEET_METAL_BRACKET"] or (flange_h > 0 and params.get("is_sheet_metal")):
+        # Check if Formed Sheet Metal Bracket preset (only when no custom scanned contour points uploaded)
+        scanned_pts = params.get("contour_points") or []
+        if (category in ["FORMED_SHEET_METAL_BRACKET", "SHEET_METAL_BRACKET"] or params.get("is_sheet_metal")) and len(scanned_pts) < 4:
             return self._build_formed_sheet_metal_bracket(doc, body, width, thickness, flange_h, params)
 
-        # Universal Parametric CAD Builder for ANY arbitrary mechanical component
+        # Universal Parametric CAD Builder for ANY arbitrary mechanical component / drawing:
+        # Faithfully reconstructs from the uploaded image's scanned contour, holes, and slots!
         return self._build_universal_component(doc, body, recognized_features, width, thickness, flange_h, params)
 
     def _build_universal_component(
@@ -97,20 +99,40 @@ class FeaturePlanner:
             clean_pts = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]]
 
         # Step 1: Base Contour Sketch & Pad
-        sk1 = doc.addObject('Sketcher::SketchObject', 'BaseProfile_Sk')
-        body.addObject(sk1)
-        for i in range(len(clean_pts)):
-            p1 = clean_pts[i]
-            p2 = clean_pts[(i + 1) % len(clean_pts)]
-            sk1.addGeometry(Part.LineSegment(App.Vector(p1[0], p1[1], 0), App.Vector(p2[0], p2[1], 0)))
-        doc.recompute()
+        base_built = False
+        try:
+            sk1 = doc.addObject('Sketcher::SketchObject', 'BaseProfile_Sk')
+            body.addObject(sk1)
+            for i in range(len(clean_pts)):
+                p1 = clean_pts[i]
+                p2 = clean_pts[(i + 1) % len(clean_pts)]
+                sk1.addGeometry(Part.LineSegment(App.Vector(p1[0], p1[1], 0), App.Vector(p2[0], p2[1], 0)))
+            doc.recompute()
 
-        pad1 = doc.addObject('PartDesign::Pad', 'BaseContour_Pad')
-        body.addObject(pad1)
-        pad1.Profile = sk1
-        pad1.Length = thickness
-        doc.recompute()
-        self.plan_steps.append({"step": 1, "op": "Pad", "name": "BaseContour_Pad", "length_mm": thickness, "vertices": len(clean_pts)})
+            pad1 = doc.addObject('PartDesign::Pad', 'BaseContour_Pad')
+            body.addObject(pad1)
+            pad1.Profile = sk1
+            pad1.Length = thickness
+            doc.recompute()
+            if pad1.Shape and not pad1.Shape.isNull() and pad1.Shape.isValid():
+                base_built = True
+                self.plan_steps.append({"step": 1, "op": "Pad", "name": "BaseContour_Pad", "length_mm": thickness, "vertices": len(clean_pts)})
+        except Exception:
+            base_built = False
+
+        if not base_built:
+            # Bulletproof Fallback: Part.makePolygon -> Part.Face -> Extrude -> body.BaseFeature
+            poly_pts = [App.Vector(p[0], p[1], 0) for p in clean_pts]
+            if abs(poly_pts[0].x - poly_pts[-1].x) > 0.01 or abs(poly_pts[0].y - poly_pts[-1].y) > 0.01:
+                poly_pts.append(poly_pts[0])
+            poly = Part.makePolygon(poly_pts)
+            face = Part.Face(poly)
+            solid = face.extrude(App.Vector(0, 0, thickness))
+            feat = doc.addObject("Part::Feature", "BaseContour_Solid")
+            feat.Shape = solid
+            body.BaseFeature = feat
+            doc.recompute()
+            self.plan_steps.append({"step": 1, "op": "Extrude", "name": "BaseContour_Solid", "length_mm": thickness, "vertices": len(clean_pts)})
 
         # Step 2: Upright Flange or Raised Boss
         if flange_h > 0:
@@ -356,7 +378,7 @@ class FeaturePlanner:
         # Assign solid to document body
         feat = doc.addObject("Part::Feature", "FormedSheetMetalBracket")
         feat.Shape = solid
-        body.addObject(feat)
+        body.BaseFeature = feat
         doc.recompute()
 
         self.plan_steps.append({"step": 1, "op": "SheetMetalBlank", "name": "BaseHorizontalFlange", "w_mm": width, "d_mm": depth, "t_mm": t})

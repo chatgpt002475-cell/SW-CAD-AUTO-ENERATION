@@ -898,10 +898,9 @@ G0 Z15.000</div>
                 addPart(new THREE.CylinderGeometry(width * 0.15, width * 0.15, length * 0.25, 32), [-length * 0.30, 0, 0], [0, 0, Math.PI/2]);
                 const kw = new THREE.Mesh(new THREE.BoxGeometry(length * 0.2, 4, 8), new THREE.MeshStandardMaterial({ color: 0x030712 }));
                 kw.position.set(length * 0.3, width * 0.18, 0);
-                group.add(kw);
-            } else if (category === 'FORMED_SHEET_METAL_BRACKET' || category === 'SHEET_METAL_BRACKET' || flangeH > 25.0) {
+            } else if ((!cPoints || cPoints.length < 3) && (category === 'FORMED_SHEET_METAL_BRACKET' || category === 'SHEET_METAL_BRACKET')) {
                 // =========================================================================
-                // AUTHENTIC FORMED SHEET METAL BRACKET WITH CALCULATED BEND RADIUS & DEPTH
+                // DEFAULT FORMED SHEET METAL BRACKET PRESET (only before custom image upload)
                 // =========================================================================
                 const t = Math.max(0.8, thickness);
                 const rIn = Math.max(1.5, 1.25 * t);

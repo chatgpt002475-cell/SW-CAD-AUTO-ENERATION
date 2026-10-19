@@ -198,6 +198,11 @@ class MechanicalPartClassifier:
 
         fname_lower = os.path.basename(image_path).lower()
 
+        # Detection of multi-view engineering technical drawings
+        is_drawing = False
+        if (len(all_cnts) >= 6 and (bw * bh < img_w * img_h * 0.85)) or any(k in fname_lower for k in ["draw", "dwg", "print", "blue", "cad", "ortho"]):
+            is_drawing = True
+
         if aspect_ratio > 3.2 or aspect_ratio < 0.31:
             is_revolved = True
             calc_flange_h = 0.0
@@ -205,20 +210,24 @@ class MechanicalPartClassifier:
             display_name = "Axisymmetric Turned Component (Shaft/Spindle)"
         elif circ > 0.82 and 0.85 <= aspect_ratio <= 1.18 and len(filtered_holes) >= 3:
             is_flange = True
-            calc_flange_h = round(target_w * 0.28, 1)
+            calc_flange_h = 0.0
             category = "CIRCULAR_MOUNTING_FLANGE"
             display_name = "Machined Circular Mounting Flange"
-        elif any(k in fname_lower for k in ["bracket", "sheet", "be5a", "2e95"]) or len(contour_pts_px) >= 15 or has_flange_gradient:
+        elif any(k in fname_lower for k in ["bracket", "sheet", "formed_bracket"]) or (has_flange_gradient and not is_drawing and len(filtered_holes) <= 4):
             is_sheet_metal = True
             calc_flange_h = round(target_h * 0.52, 1)
             calc_thickness = 2.0
             category = "FORMED_SHEET_METAL_BRACKET"
             display_name = "Formed Sheet Metal Bracket / Enclosure"
-        elif any(k in fname_lower for k in ["die", "2d2f", "stamp"]) or len(filtered_slots) >= 3:
+        elif any(k in fname_lower for k in ["die", "stamp", "tooling"]) or len(filtered_slots) >= 3:
             is_stamped = True
             calc_flange_h = 0.0
             category = "PRECISION_STAMPED_COMPONENT"
             display_name = "Precision Stamped Tooling Plate"
+        elif is_drawing:
+            calc_flange_h = 0.0
+            category = "ENGINEERING_DRAWING_COMPONENT"
+            display_name = "Dimensioned Engineering Drawing Component"
         else:
             calc_flange_h = 0.0
             category = "PRISMATIC_MACHINED_PART"
