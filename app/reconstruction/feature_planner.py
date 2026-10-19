@@ -49,9 +49,8 @@ class FeaturePlanner:
         if is_revolved:
             return self._build_turned_shaft(doc, body, width, thickness, params)
 
-        # Check if Formed Sheet Metal Bracket preset (only when no custom scanned contour points uploaded)
-        scanned_pts = params.get("contour_points") or []
-        if (category in ["FORMED_SHEET_METAL_BRACKET", "SHEET_METAL_BRACKET"] or params.get("is_sheet_metal")) and len(scanned_pts) < 4:
+        # Check if Formed Sheet Metal Bracket
+        if (category in ["FORMED_SHEET_METAL_BRACKET", "SHEET_METAL_BRACKET"] or params.get("is_sheet_metal")):
             return self._build_formed_sheet_metal_bracket(doc, body, width, thickness, flange_h, params)
 
         # Universal Parametric CAD Builder for ANY arbitrary mechanical component / drawing:

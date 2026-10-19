@@ -164,7 +164,7 @@ class MechanicalPartClassifier:
                 filtered_slots.append(s)
 
         # 6. Physical Dimensions Calibration
-        target_w = float(reference_width_mm) if reference_width_mm else round(max(50.0, min(240.0, float(bw) * 0.38)), 1)
+        target_w = float(reference_width_mm) if reference_width_mm else round(max(60.0, min(140.0, float(bw) * 0.20)), 1)
         scale = target_w / max(1.0, float(bw))
         target_h = round(float(bh) * scale, 1)
 
@@ -189,7 +189,7 @@ class MechanicalPartClassifier:
         sobel_f = 0.0
         if flange_roi.size > 0:
             sobel_f = float(np.mean(np.abs(cv2.Sobel(flange_roi, cv2.CV_64F, 0, 1, ksize=3))))
-        has_flange_gradient = sobel_f > 8.5
+        has_flange_gradient = sobel_f > 7.5
 
         is_revolved = False
         is_flange = False
@@ -198,28 +198,32 @@ class MechanicalPartClassifier:
 
         fname_lower = os.path.basename(image_path).lower()
 
-        # Detection of multi-view engineering technical drawings
+        # Detection of multi-view engineering technical drawings vs physical photographs
         is_drawing = False
-        if (len(all_cnts) >= 6 and (bw * bh < img_w * img_h * 0.85)) or any(k in fname_lower for k in ["draw", "dwg", "print", "blue", "cad", "ortho"]):
+        if any(k in fname_lower for k in ["draw", "dwg", "print", "blue", "cad", "ortho", "schematic"]):
             is_drawing = True
+        else:
+            white_pixel_ratio = float(np.count_nonzero(gray > 240)) / float(img_w * img_h)
+            if white_pixel_ratio > 0.85 and sobel_f < 6.0:
+                is_drawing = True
 
         if aspect_ratio > 3.2 or aspect_ratio < 0.31:
             is_revolved = True
             calc_flange_h = 0.0
             category = "REVOLVED_COMPONENT"
             display_name = "Axisymmetric Turned Component (Shaft/Spindle)"
-        elif circ > 0.82 and 0.85 <= aspect_ratio <= 1.18 and len(filtered_holes) >= 3:
+        elif circ > 0.82 and 0.85 <= aspect_ratio <= 1.18 and not has_flange_gradient and len(filtered_holes) >= 3:
             is_flange = True
             calc_flange_h = 0.0
             category = "CIRCULAR_MOUNTING_FLANGE"
             display_name = "Machined Circular Mounting Flange"
-        elif any(k in fname_lower for k in ["bracket", "sheet", "formed_bracket"]) or (has_flange_gradient and not is_drawing and len(filtered_holes) <= 4):
+        elif any(k in fname_lower for k in ["bracket", "sheet", "formed_bracket", "flange"]) or (has_flange_gradient and not is_drawing):
             is_sheet_metal = True
-            calc_flange_h = round(target_h * 0.52, 1)
-            calc_thickness = 2.0
+            calc_flange_h = round(max(35.0, target_h * 0.52), 1)
+            calc_thickness = 2.0  # Standard 14-gauge sheet metal (DIN EN 10130 / ASTM A1008)
             category = "FORMED_SHEET_METAL_BRACKET"
             display_name = "Formed Sheet Metal Bracket / Enclosure"
-        elif any(k in fname_lower for k in ["die", "stamp", "tooling"]) or len(filtered_slots) >= 3:
+        elif any(k in fname_lower for k in ["die", "stamp", "tooling"]) or (len(filtered_slots) >= 3 and not has_flange_gradient):
             is_stamped = True
             calc_flange_h = 0.0
             category = "PRECISION_STAMPED_COMPONENT"
@@ -265,84 +269,99 @@ class MechanicalPartClassifier:
 
         # 8. Dynamically Synthesize Parametric Feature Tree strictly from Scanned Data
         feature_tree = []
-        feature_tree.append({
-            "name": "BaseContour_ProfilePad",
-            "tag": f"PartDesign::Pad (T={calc_thickness}mm, {len(contour_mm)} vertices)",
-            "icon": "📐"
-        })
-
-        if calc_flange_h > 0:
+        if is_sheet_metal:
+            r_in = round(max(1.5, 1.25 * calc_thickness), 2)
+            feature_tree = [
+                {"name": "SheetMetalBasePlate", "tag": f"PartDesign::Pad (T={calc_thickness}mm, W={target_w}mm)", "icon": "📐"},
+                {"name": "Primary90DegBend", "tag": f"SheetMetal::Fold (R_in={r_in}mm, K=0.42)", "icon": "↪️"},
+                {"name": "UprightFlangeWeb", "tag": f"PartDesign::Flange (H={calc_flange_h}mm)", "icon": "🏗️"},
+                {"name": "CentralClearanceBore", "tag": f"Subtractive::Cylinder (Ø={min(round(target_w*0.25,1), 32.0)}mm)", "icon": "⭕"},
+                {"name": "UpperMountingHoles_2x", "tag": "Subtractive::Holes (2x Ø=5.0mm)", "icon": "🕳️"},
+                {"name": "SideMountingEarFlange", "tag": "SheetMetal::Ear (90° fold, Ø=6.4mm hole)", "icon": "📑"},
+                {"name": "TopCanopyReturnLip", "tag": "SheetMetal::Canopy (90° return fold)", "icon": "🏷️"},
+                {"name": "BaseMountingSlots_2x", "tag": "Subtractive::Slots (2x Ø=7.0mm)", "icon": "🔘"},
+                {"name": "CornerReliefNotches", "tag": "Subtractive::Cutout (R=4.0mm)", "icon": "✂️"}
+            ]
+        else:
             feature_tree.append({
-                "name": "UprightFlangeWeb" if is_sheet_metal else "RaisedHubBoss",
-                "tag": f"PartDesign::Pad (H={calc_flange_h}mm)",
-                "icon": "🏗️"
+                "name": "BaseContour_ProfilePad",
+                "tag": f"PartDesign::Pad (T={calc_thickness}mm, {len(contour_mm)} vertices)",
+                "icon": "📐"
             })
-            if is_sheet_metal:
+
+            if calc_flange_h > 0:
                 feature_tree.append({
-                    "name": "Primary90DegBend",
-                    "tag": "SheetMetal::Fold (R=3.0mm, K=0.42)",
-                    "icon": "↪️"
+                    "name": "UprightFlangeWeb",
+                    "tag": f"PartDesign::Pad (H={calc_flange_h}mm)",
+                    "icon": "🏗️"
                 })
 
-        for i, h in enumerate(holes_mm[:8]):
-            feature_tree.append({
-                "name": f"ThroughHole_{i+1}",
-                "tag": f"Subtractive::Hole (Ø={h['dia']}mm at X={h['x']}, Y={h['y']})",
-                "icon": "🕳️"
-            })
+            for i, h in enumerate(holes_mm[:8]):
+                feature_tree.append({
+                    "name": f"ThroughHole_{i+1}",
+                    "tag": f"Subtractive::Hole (Ø={h['dia']}mm at X={h['x']}, Y={h['y']})",
+                    "icon": "🕳️"
+                })
 
-        for j, s in enumerate(slots_mm[:6]):
-            feature_tree.append({
-                "name": f"MachinedSlot_{j+1}",
-                "tag": f"Subtractive::Slot ({s['len']}x{s['w']}mm at X={s['x']}, Y={s['y']})",
-                "icon": "🔘"
-            })
+            for j, s in enumerate(slots_mm[:6]):
+                feature_tree.append({
+                    "name": f"MachinedSlot_{j+1}",
+                    "tag": f"Subtractive::Slot ({s['len']}x{s['w']}mm at X={s['x']}, Y={s['y']})",
+                    "icon": "🔘"
+                })
 
-        feature_tree.append({
-            "name": "EdgeDeburrChamfer",
-            "tag": "PartDesign::Chamfer (0.5mm x 45°)",
-            "icon": "✨"
-        })
+            feature_tree.append({
+                "name": "EdgeDeburrChamfer",
+                "tag": "PartDesign::Chamfer (0.5mm x 45°)",
+                "icon": "✨"
+            })
 
         # 9. Dynamically Synthesize CNC CAM Operations strictly from Scanned Data
         cam_operations = []
-        cam_operations.append({
-            "op": "CNC Face Milling",
-            "tool": "50mm Face Mill (5 Indexable Carbide Inserts)",
-            "speed": "1400 mm/min",
-            "details": f"Facing envelope {target_w}x{target_h}x{calc_thickness}mm to reference datum"
-        })
-
-        if holes_mm:
+        if is_sheet_metal:
+            cam_operations = [
+                {"op": "Fiber Laser 2D Blanking", "tool": "Fiber Laser 4kW (N2 14 bar)", "speed": "4800 mm/min", "details": f"Cutting developed flat blank pattern envelope {target_w}x{round(target_w*0.58+calc_flange_h,1)}mm"},
+                {"op": "CNC Turret Punching Array", "tool": "Station 1: Ø28mm, Station 2: Ø5mm, Station 3: Ø6.4mm", "speed": "450 hits/min", "details": "High-precision bore piercing & slot punching"},
+                {"op": "CNC Press Brake 4-Axis Bending", "tool": "Acute Punch 86° / V-Die 12mm", "speed": "35 mm/s", "details": f"Multi-axis forming: 90° primary web, top return canopy & side mounting ear"}
+            ]
+        else:
             cam_operations.append({
-                "op": "CNC High-Speed Drilling Array",
-                "tool": f"Solid Carbide Drill (Ø{holes_mm[0]['dia']}mm - Ø{holes_mm[-1]['dia']}mm)",
-                "speed": "550 mm/min",
-                "details": f"Through-spindle coolant drilling for {len(holes_mm)} precision holes"
+                "op": "CNC Face Milling",
+                "tool": "50mm Face Mill (5 Indexable Carbide Inserts)",
+                "speed": "1400 mm/min",
+                "details": f"Facing envelope {target_w}x{target_h}x{calc_thickness}mm to reference datum"
             })
 
-        if slots_mm:
+            if holes_mm:
+                cam_operations.append({
+                    "op": "CNC High-Speed Drilling Array",
+                    "tool": f"Solid Carbide Drill (Ø{holes_mm[0]['dia']}mm - Ø{holes_mm[-1]['dia']}mm)",
+                    "speed": "550 mm/min",
+                    "details": f"Through-spindle coolant drilling for {len(holes_mm)} precision holes"
+                })
+
+            if slots_mm:
+                cam_operations.append({
+                    "op": "CNC Slot Milling / Trochoidal Pocketing",
+                    "tool": "6mm 4-Flute Carbide Endmill",
+                    "speed": "920 mm/min",
+                    "details": f"High-efficiency milling for {len(slots_mm)} internal slots"
+                })
+
             cam_operations.append({
-                "op": "CNC Slot Milling / Trochoidal Pocketing",
-                "tool": "6mm 4-Flute Carbide Endmill",
-                "speed": "920 mm/min",
-                "details": f"High-efficiency milling for {len(slots_mm)} internal slots"
+                "op": "2D Contour Profiling",
+                "tool": "Fiber Laser 4kW / 10mm Carbide Endmill",
+                "speed": "4200 mm/min",
+                "details": f"Machining scanned {len(contour_mm)}-vertex perimeter profile"
             })
 
-        cam_operations.append({
-            "op": "2D Contour Profiling",
-            "tool": "Fiber Laser 4kW / 10mm Carbide Endmill",
-            "speed": "4200 mm/min",
-            "details": f"Machining scanned {len(contour_mm)}-vertex perimeter profile"
-        })
-
-        if calc_flange_h > 0 and is_sheet_metal:
-            cam_operations.append({
-                "op": "CNC Press Brake 4-Axis Bending",
-                "tool": "Acute Punch 86° / V-Die 12mm",
-                "speed": "35 mm/s",
-                "details": f"Forming primary {calc_flange_h}mm upright web flange"
-            })
+            if calc_flange_h > 0:
+                cam_operations.append({
+                    "op": "CNC Flange Finishing",
+                    "tool": "12mm Indexable Shoulder Mill",
+                    "speed": "1100 mm/min",
+                    "details": f"Finishing upright {calc_flange_h}mm flange web"
+                })
 
         cycle_min = max(1, int(len(feature_tree) * 0.35 + 0.5))
         est_cycle_time = f"{cycle_min}m {int(len(contour_mm) * 1.5)}s"

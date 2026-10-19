@@ -120,6 +120,10 @@ def reconstruct():
     thickness_mm = float(request.form.get("base_thickness_mm") or request.form.get("base_thickness") or 3.0)
     flange_h_mm = float(request.form.get("flange_height_mm") or request.form.get("flange_height") or 0.0)
     controller = request.form.get("controller", "LinuxCNC")
+    category = request.form.get("category", "")
+    user_params = {}
+    if category:
+        user_params["category"] = category
 
     step_name = f"cad_{job_id}.step"
     fcstd_name = f"cad_{job_id}.FCStd"
@@ -141,7 +145,8 @@ def reconstruct():
             output_step_path=step_path,
             output_fcstd_path=fcstd_path,
             output_gcode_path=gcode_path,
-            output_stl_path=stl_path
+            output_stl_path=stl_path,
+            user_params=user_params
         )
 
         # Read G-code sample lines
